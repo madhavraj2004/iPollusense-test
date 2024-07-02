@@ -1,5 +1,4 @@
-import com.example.ipollusense.R;
-;
+package com.example.ipollusense;
 
 import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
@@ -7,160 +6,169 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
-import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
-import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
-import android.os.Handler;
-import android.util.Log;
 import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.ListView;
+import android.widget.TableRow;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-public class MainActivity extends AppCompatActivity implements ActivityCompat.OnRequestPermissionsResultCallback {
-
-    private static final int REQUEST_ENABLE_BT = 1;
-    private static final int REQUEST_FINE_LOCATION = 2;
+public class MainActivity extends AppCompatActivity {
 
     private BluetoothAdapter bluetoothAdapter;
     private BluetoothGatt bluetoothGatt;
-    private TextView statusTextView;
-    private TextView receivedDataTextView;
-    private Button scanButton;
-    private Button connectButton;
-    private Button getDataButton;
+    private final int REQUEST_ENABLE_BT = 1;
+    private final int REQUEST_PERMISSION_LOCATION = 2;
+    private final int REQUEST_PERMISSION_BLUETOOTH = 3;
 
-    private BluetoothDevice selectedDevice;
+    private ArrayAdapter<String> deviceListAdapter;
+    private List<String> deviceList = new ArrayList<>();
+    private List<BluetoothDevice> bluetoothDevices = new ArrayList<>();
 
-    private final String TAG = "BLEApp";
+    private final UUID SERVICE_UUID = UUID.fromString("0000180f-0000-1000-8000-00805f9b34fb"); // Example service UUID
+    private final UUID CHARACTERISTIC_UUID = UUID.fromString("00002a19-0000-1000-8000-00805f9b34fb"); // Example characteristic UUID
 
-    // UUIDs for the GATT services and characteristics
-    private static final UUID SERVICE_UUID = UUID.fromString("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx");
-    private static final UUID CHARACTERISTIC_UUID = UUID.fromString("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx");
+    private TextView label1;
+    private TextView temperatureValue;
+    private TextView humidityValue;
+    private TextView no2Value;
+    private TextView c2h5ohValue;
+    private TextView vocValue;
+    private TextView coValue;
+    private TextView pm1Value;
+    private TextView pm2Value;
+    private TextView pm10Value;
+    private TextView testValue;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        statusTextView = findViewById(R.id.STATUS);
-        receivedDataTextView = findViewById(R.id.SCREEN);
-        scanButton = findViewById(R.id.SCAN);
-        connectButton = findViewById(R.id.CONNECT);
-        getDataButton = findViewById(R.id.RDATA);
+        // Initialize UI components
+        ListView listViewDevices = findViewById(R.id.listViewDevices);
+        Button btnScan = findViewById(R.id.btn_scan);
+        deviceListAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, deviceList);
+        listViewDevices.setAdapter(deviceListAdapter);
 
-        // Initializes Bluetooth adapter.
-        final BluetoothManager bluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+        label1 = findViewById(R.id.label1);
+        temperatureValue = findViewById(R.id.temp_value);
+        humidityValue = findViewById(R.id.hum_value);
+        no2Value = findViewById(R.id.no2_value);
+        c2h5ohValue = findViewById(R.id.c2h5oh_value);
+        vocValue = findViewById(R.id.voc_value);
+        coValue = findViewById(R.id.co_value);
+        pm1Value = findViewById(R.id.pm1_value);
+        pm2Value = findViewById(R.id.pm2_value);
+        pm10Value = findViewById(R.id.pm10_value);
+        testValue = findViewById(R.id.test_value);
+
+        listViewDevices.setOnItemClickListener((parent, view, position, id) -> {
+            BluetoothDevice device = bluetoothDevices.get(position);
+            connectToDevice(device);
+        });
+
+        // Check for necessary permissions and request them if not granted
+        checkAndRequestPermissions();
+
+        // Get BluetoothAdapter
+        BluetoothManager bluetoothManager = (BluetoothManager) getSystemService(BLUETOOTH_SERVICE);
         bluetoothAdapter = bluetoothManager.getAdapter();
 
-        // Ensures Bluetooth is available on the device and prompts to enable if not.
-        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled()) {
+        // Check if Bluetooth is supported on the device
+        if (bluetoothAdapter == null) {
+            Toast.makeText(this, "Bluetooth is not supported on this device", Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
+
+        // Request to enable Bluetooth if it is not enabled
+        if (!bluetoothAdapter.isEnabled()) {
             Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
             startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
         }
 
-        // Request location permission
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.ACCESS_FINE_LOCATION)) {
-                new AlertDialog.Builder(this)
-                        .setTitle("Location permission required")
-                        .setMessage("This app requires access to your device's location to function properly.")
-                        .setPositiveButton("OK", new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(DialogInterface dialogInterface, int i) {
-                                ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_FINE_LOCATION);
-                            }
-                        })
-                        .create()
-                        .show();
+        // Handle button click to start scanning
+        btnScan.setOnClickListener(v -> {
+            if (bluetoothAdapter.isEnabled()) {
+                startBluetoothScanning();
             } else {
-                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_FINE_LOCATION);
-            }
-        }
-
-        scanButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                scanForDevices();
-            }
-        });
-
-        connectButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                connectToDevice();
-            }
-        });
-
-        getDataButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                getData();
+                Toast.makeText(MainActivity.this, "Please enable Bluetooth first", Toast.LENGTH_SHORT).show();
             }
         });
     }
 
-    private void scanForDevices() {
+    private void checkAndRequestPermissions() {
+        List<String> permissionsNeeded = new ArrayList<>();
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            permissionsNeeded.add(Manifest.permission.ACCESS_FINE_LOCATION);
+        }
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH)
+                != PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADMIN)
+                        != PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN)
+                        != PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
+                        != PackageManager.PERMISSION_GRANTED) {
+            permissionsNeeded.add(Manifest.permission.BLUETOOTH);
+            permissionsNeeded.add(Manifest.permission.BLUETOOTH_ADMIN);
+            permissionsNeeded.add(Manifest.permission.BLUETOOTH_SCAN);
+            permissionsNeeded.add(Manifest.permission.BLUETOOTH_CONNECT);
+        }
+
+        if (!permissionsNeeded.isEmpty()) {
+            ActivityCompat.requestPermissions(this, permissionsNeeded.toArray(new String[0]),
+                    REQUEST_PERMISSION_BLUETOOTH);
+        }
+    }
+
+    private void startBluetoothScanning() {
         bluetoothAdapter.startLeScan(leScanCallback);
-        statusTextView.setText("Scanning...");
-        new Handler().postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                bluetoothAdapter.stopLeScan(leScanCallback);
-                statusTextView.setText("Scan complete.");
-            }
-        }, 10000);
     }
 
-    private final BluetoothAdapter.LeScanCallback leScanCallback = new BluetoothAdapter.LeScanCallback() {
-        @Override
-        public void onLeScan(final BluetoothDevice device, int rssi, byte[] scanRecord) {
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    if (device.getName() != null && device.getName().equals("ESP32S3")) {
-                        selectedDevice = device;
-                        statusTextView.setText("Device found: " + device.getName());
-                        bluetoothAdapter.stopLeScan(leScanCallback);
-                    }
-                }
-            });
+    private final BluetoothAdapter.LeScanCallback leScanCallback = (device, rssi, scanRecord) -> runOnUiThread(() -> {
+        if (!deviceList.contains(device.getName() + "\n" + device.getAddress())) {
+            deviceList.add(device.getName() + "\n" + device.getAddress());
+            bluetoothDevices.add(device);
+            deviceListAdapter.notifyDataSetChanged();
         }
-    };
+    });
 
-    private void connectToDevice() {
-        if (selectedDevice != null) {
-            bluetoothGatt = selectedDevice.connectGatt(this, false, gattCallback);
-            statusTextView.setText("Connecting...");
-        } else {
-            statusTextView.setText("No device selected.");
-        }
+    private void connectToDevice(BluetoothDevice device) {
+        bluetoothGatt = device.connectGatt(this, false, gattCallback);
     }
 
     private final BluetoothGattCallback gattCallback = new BluetoothGattCallback() {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
-                statusTextView.setText("Connected to GATT server.");
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, "Connected to device", Toast.LENGTH_SHORT).show());
                 bluetoothGatt.discoverServices();
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                statusTextView.setText("Disconnected from GATT server.");
-                bluetoothGatt.close();
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, "Disconnected from device", Toast.LENGTH_SHORT).show());
             }
         }
 
@@ -171,50 +179,57 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
                 if (service != null) {
                     BluetoothGattCharacteristic characteristic = service.getCharacteristic(CHARACTERISTIC_UUID);
                     if (characteristic != null) {
-                        gatt.setCharacteristicNotification(characteristic, true);
-                        BluetoothGattDescriptor descriptor = characteristic.getDescriptor(CHARACTERISTIC_UUID);
-                        if (descriptor != null) {
-                            descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-                            gatt.writeDescriptor(descriptor);
-                        }
+                        gatt.readCharacteristic(characteristic);
                     }
                 }
             }
         }
 
         @Override
-        public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
-            if (CHARACTERISTIC_UUID.equals(characteristic.getUuid())) {
-                final String data = new String(characteristic.getValue());
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        receivedDataTextView.setText(data);
+        public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                byte[] data = characteristic.getValue();
+                String dataString = new String(data);
+                runOnUiThread(() -> {
+                    try {
+                        JSONObject jsonObject = new JSONObject(dataString);
+                        label1.setText(dataString);
+
+                        temperatureValue.setText(String.valueOf(jsonObject.getDouble("temperature")));
+                        humidityValue.setText(String.valueOf(jsonObject.getDouble("humidity")));
+                        no2Value.setText(String.valueOf(jsonObject.getInt("no2")));
+                        c2h5ohValue.setText(String.valueOf(jsonObject.getInt("c2h5oh")));
+                        vocValue.setText(String.valueOf(jsonObject.getInt("voc")));
+                        coValue.setText(String.valueOf(jsonObject.getInt("co")));
+                        pm1Value.setText(String.valueOf(jsonObject.getInt("pm1")));
+                        pm2Value.setText(String.valueOf(jsonObject.getInt("pm2_5")));
+                        pm10Value.setText(String.valueOf(jsonObject.getInt("pm10")));
+                        testValue.setText(String.valueOf(jsonObject.getInt("test")));
+
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                        Toast.makeText(MainActivity.this, "Failed to parse JSON", Toast.LENGTH_SHORT).show();
                     }
                 });
             }
         }
     };
 
-    private void getData() {
-        if (bluetoothGatt != null) {
-            BluetoothGattService service = bluetoothGatt.getService(SERVICE_UUID);
-            if (service != null) {
-                BluetoothGattCharacteristic characteristic = service.getCharacteristic(CHARACTERISTIC_UUID);
-                if (characteristic != null) {
-                    bluetoothGatt.readCharacteristic(characteristic);
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
+                                           @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_PERMISSION_LOCATION || requestCode == REQUEST_PERMISSION_BLUETOOTH) {
+            boolean allGranted = true;
+            for (int grantResult : grantResults) {
+                if (grantResult != PackageManager.PERMISSION_GRANTED) {
+                    allGranted = false;
+                    break;
                 }
             }
-        }
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        if (requestCode == REQUEST_FINE_LOCATION) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "Location permission granted", Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(this, "Location permission denied", Toast.LENGTH_SHORT).show();
+            if (!allGranted) {
+                Toast.makeText(this, "Permissions not granted", Toast.LENGTH_SHORT).show();
+                finish();
             }
         }
     }
