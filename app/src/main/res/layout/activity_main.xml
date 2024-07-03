@@ -1,123 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="16dp">
+    tools:context=".MainActivity">
 
-    <LinearLayout
-        android:layout_width="match_parent"
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottom_navigation"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_horizontal">
+        android:layout_marginStart="0dp"
+        android:layout_marginEnd="0dp"
+        android:background="?android:attr/windowBackground"
+        app:itemIconTint="@color/bottom_nav_color"
+        app:itemTextColor="@color/bottom_nav_color"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:menu="@menu/bottom_nav_menu" />
 
-        <Button
-            android:id="@+id/btn_scan"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_margin="4dp"
-            android:text="Scan" />
 
-    </LinearLayout>
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/nav_host_fragment"
+        android:name="androidx.navigation.fragment.NavHostFragment"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:defaultNavHost="true"
+        app:layout_constraintBottom_toTopOf="@id/bottom_navigation"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:navGraph="@navigation/nav_graph" />
 
-    <ListView
-        android:id="@+id/listViewDevices"
-        android:layout_width="match_parent"
-        android:layout_height="128dp"
-        android:divider="@android:color/darker_gray"
-        android:dividerHeight="1dp"
-        android:padding="8dp" />
-
-    <TextView
-        android:id="@+id/status"
-        android:layout_width="match_parent"
-        android:layout_height="39dp"
-        android:background="@android:color/black"
-        android:padding="4dp"
-        android:text="Status:"
-        android:textColor="@android:color/white" />
-
-    <Button
-        android:id="@+id/btn_get_data"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Get data from json text"
-        android:layout_marginTop="8dp"/>
-
-    <ScrollView
-        android:layout_width="match_parent"
-        android:layout_height="38dp">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical" />
-    </ScrollView>
-
-    <TextView
-        android:id="@+id/label1"
-        android:layout_width="match_parent"
-        android:layout_height="69dp"
-        android:layout_marginTop="8dp"
-        android:padding="4dp"
-        android:text="Text for Label1" />
-
-    <TableLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:stretchColumns="1"
-        android:layout_marginTop="8dp">
-
-        <TableRow>
-            <TextView android:text="temp" android:padding="4dp"/>
-            <TextView android:id="@+id/temp_value" android:text="000" android:padding="4dp" android:background="@android:color/black" android:textColor="@android:color/holo_green_light"/>
-        </TableRow>
-
-        <TableRow>
-            <TextView android:text="hum." android:padding="4dp"/>
-            <TextView android:id="@+id/hum_value" android:text="000" android:padding="4dp" android:background="@android:color/black" android:textColor="@android:color/holo_green_light"/>
-        </TableRow>
-
-        <TableRow>
-            <TextView android:text="NO2" android:padding="4dp"/>
-            <TextView android:id="@+id/no2_value" android:text="000" android:padding="4dp" android:background="@android:color/black" android:textColor="@android:color/holo_green_light"/>
-        </TableRow>
-
-        <TableRow>
-            <TextView android:text="C2H5OH" android:padding="4dp"/>
-            <TextView android:id="@+id/c2h5oh_value" android:text="000" android:padding="4dp" android:background="@android:color/black" android:textColor="@android:color/holo_green_light"/>
-        </TableRow>
-
-        <TableRow>
-            <TextView android:text="VOC" android:padding="4dp"/>
-            <TextView android:id="@+id/voc_value" android:text="000" android:padding="4dp" android:background="@android:color/black" android:textColor="@android:color/holo_green_light"/>
-        </TableRow>
-
-        <TableRow>
-            <TextView android:text="CO" android:padding="4dp"/>
-            <TextView android:id="@+id/co_value" android:text="000" android:padding="4dp" android:background="@android:color/black" android:textColor="@android:color/holo_green_light"/>
-        </TableRow>
-
-        <TableRow>
-            <TextView android:text="PM1" android:padding="4dp"/>
-            <TextView android:id="@+id/pm1_value" android:text="000" android:padding="4dp" android:background="@android:color/black" android:textColor="@android:color/holo_green_light"/>
-        </TableRow>
-
-        <TableRow>
-            <TextView android:text="PM2" android:padding="4dp"/>
-            <TextView android:id="@+id/pm2_value" android:text="000" android:padding="4dp" android:background="@android:color/black" android:textColor="@android:color/holo_green_light"/>
-        </TableRow>
-
-        <TableRow>
-            <TextView android:text="PM10" android:padding="4dp"/>
-            <TextView android:id="@+id/pm10_value" android:text="000" android:padding="4dp" android:background="@android:color/black" android:textColor="@android:color/holo_green_light"/>
-        </TableRow>
-
-        <TableRow>
-            <TextView android:text="TEST" android:padding="4dp"/>
-            <TextView android:id="@+id/test_value" android:text="000" android:padding="4dp" android:background="@android:color/black" android:textColor="@android:color/holo_green_light"/>
-        </TableRow>
-    </TableLayout>
-
-</LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

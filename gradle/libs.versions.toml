@@ -7,6 +7,18 @@ appcompat = "1.6.1"
 material = "1.12.0"
 activity = "1.9.0"
 constraintlayout = "2.1.4"
+playServicesMaps = "19.0.0"
+playServicesLocation = "21.3.0"
+vectordrawable = "1.2.0"
+supportAnnotations = "28.0.0"
+legacySupportV13 = "1.0.0"
+paletteV7 = "28.0.0"
+mediarouterV7 = "28.0.0"
+appcompatV7 = "28.0.0"
+playServices = "12.0.1"
+navigationFragment = "2.7.7"
+navigationUi = "2.7.7"
+lifecycleCommonJvm = "2.8.3"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -16,6 +28,18 @@ appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "a
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 activity = { group = "androidx.activity", name = "activity", version.ref = "activity" }
 constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
+play-services-maps = { group = "com.google.android.gms", name = "play-services-maps", version.ref = "playServicesMaps" }
+play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
+vectordrawable = { group = "androidx.vectordrawable", name = "vectordrawable", version.ref = "vectordrawable" }
+support-annotations = { group = "com.android.support", name = "support-annotations", version.ref = "supportAnnotations" }
+legacy-support-v13 = { group = "androidx.legacy", name = "legacy-support-v13", version.ref = "legacySupportV13" }
+palette-v7 = { group = "com.android.support", name = "palette-v7", version.ref = "paletteV7" }
+mediarouter-v7 = { group = "com.android.support", name = "mediarouter-v7", version.ref = "mediarouterV7" }
+appcompat-v7 = { group = "com.android.support", name = "appcompat-v7", version.ref = "appcompatV7" }
+play-services = { group = "com.google.android.gms", name = "play-services", version.ref = "playServices" }
+navigation-fragment = { group = "androidx.navigation", name = "navigation-fragment", version.ref = "navigationFragment" }
+navigation-ui = { group = "androidx.navigation", name = "navigation-ui", version.ref = "navigationUi" }
+lifecycle-common-jvm = { group = "androidx.lifecycle", name = "lifecycle-common-jvm", version.ref = "lifecycleCommonJvm" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
