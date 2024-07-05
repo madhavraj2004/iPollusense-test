@@ -8,18 +8,19 @@ import android.os.Looper;
 import androidx.appcompat.app.AppCompatActivity;
 
 public class SplashActivity extends AppCompatActivity {
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_splash);
 
-        // Delay for the splash screen (e.g., 2 seconds)
-        new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            // Start the MainActivity
-            Intent intent = new Intent(SplashActivity.this, MainActivity.class);
-            startActivity(intent);
-            finish();
-        }, 2000); // 2000 milliseconds delay
+        new Handler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                Intent intent = new Intent(SplashActivity.this, FeaturesActivity.class);
+                startActivity(intent);
+                finish();  // Close SplashActivity
+            }
+        }, 3000);  // 3-second delay
     }
 }
+

@@ -6,6 +6,7 @@ android {
     namespace = "com.example.ipollusense"
     compileSdk = 34
 
+
     defaultConfig {
         applicationId = "com.example.ipollusense"
         minSdk = 22
