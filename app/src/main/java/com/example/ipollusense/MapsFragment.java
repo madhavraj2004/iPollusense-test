@@ -1,95 +1,86 @@
 package com.example.ipollusense;
 
 import android.Manifest;
+import android.content.Context;
 import android.content.pm.PackageManager;
 import android.location.Location;
-import android.os.Bundle;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.fragment.app.Fragment;
+import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
-import androidx.lifecycle.Lifecycle;
-import androidx.lifecycle.LifecycleObserver;
-import androidx.lifecycle.OnLifecycleEvent;
-import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.android.gms.location.LocationServices;
-import com.google.android.gms.maps.CameraUpdateFactory;
-import com.google.android.gms.maps.GoogleMap;
-import com.google.android.gms.maps.OnMapReadyCallback;
-import com.google.android.gms.maps.SupportMapFragment;
-import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.MarkerOptions;
-import com.google.android.material.snackbar.Snackbar;
 
-public class MapsFragment extends Fragment implements OnMapReadyCallback, LifecycleObserver {
+public class MapsFragment extends Fragment {
 
-    private GoogleMap mMap;
-    private FusedLocationProviderClient fusedLocationClient;
-    private final int LOCATION_PERMISSION_REQUEST_CODE = 1;
+    private LocationManager locationManager;
+    private TextView locationTextView;
+    private final int REQUEST_LOCATION_PERMISSION = 1;
 
+    @Nullable
     @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
-        getLifecycle().addObserver(this);
-    }
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        View view = inflater.inflate(R.layout.fragment_maps, container, false);
 
-    @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        View rootView = inflater.inflate(R.layout.fragment_maps, container, false);
-        SupportMapFragment mapFragment = (SupportMapFragment) getChildFragmentManager().findFragmentById(R.id.map);
-        if (mapFragment != null) {
-            mapFragment.getMapAsync(this);
-        }
-        return rootView;
-    }
+        locationTextView = view.findViewById(R.id.locationTextView);
+        locationManager = (LocationManager) getActivity().getSystemService(Context.LOCATION_SERVICE);
 
-    @Override
-    public void onMapReady(GoogleMap googleMap) {
-        mMap = googleMap;
-        enableMyLocation();
-    }
-
-    private void enableMyLocation() {
-        if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, LOCATION_PERMISSION_REQUEST_CODE);
-            return;
-        }
-        mMap.setMyLocationEnabled(true);
-        fusedLocationClient.getLastLocation().addOnSuccessListener(requireActivity(), this::updateLocationUI);
-    }
-
-    private void updateLocationUI(Location location) {
-        if (location != null) {
-            LatLng currentLocation = new LatLng(location.getLatitude(), location.getLongitude());
-            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
-            mMap.addMarker(new MarkerOptions().position(currentLocation).title("You are here"));
+        // Check for location permissions and request them if not granted
+        if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(getActivity(),
+                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_LOCATION_PERMISSION);
         } else {
-            Snackbar.make(requireView(), "Unable to get current location", Snackbar.LENGTH_LONG).show();
+            startLocationUpdates();
         }
+
+        return view;
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
+        if (requestCode == REQUEST_LOCATION_PERMISSION) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                enableMyLocation();
+                startLocationUpdates();
             } else {
-                Snackbar.make(requireView(), "Permission denied", Snackbar.LENGTH_LONG).show();
+                Toast.makeText(getContext(), "Permission denied", Toast.LENGTH_SHORT).show();
             }
         }
     }
 
-    @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
-    public void cleanup() {
-        if (mMap != null) {
-            mMap.setMyLocationEnabled(false);
+    private void startLocationUpdates() {
+        if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) {
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 5000, 10, locationListener);
         }
     }
+
+    private final LocationListener locationListener = new LocationListener() {
+        @Override
+        public void onLocationChanged(@NonNull Location location) {
+            double latitude = location.getLatitude();
+            double longitude = location.getLongitude();
+            locationTextView.setText("Latitude: " + latitude + "\nLongitude: " + longitude);
+        }
+
+        @Override
+        public void onStatusChanged(String provider, int status, Bundle extras) {
+        }
+
+        @Override
+        public void onProviderEnabled(@NonNull String provider) {
+        }
+
+        @Override
+        public void onProviderDisabled(@NonNull String provider) {
+        }
+    };
 }
