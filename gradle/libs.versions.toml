@@ -1,5 +1,6 @@
 [versions]
 agp = "8.5.0"
+anychart = "1.1.6"
 dexter = "6.2.3"
 junit = "4.13.2"
 junitVersion = "1.1.5"
@@ -22,6 +23,7 @@ navigationUi = "2.7.7"
 lifecycleCommonJvm = "2.8.3"
 
 [libraries]
+anychart = { module = "com.anychart:anychart", version.ref = "anychart" }
 dexter = { module = "com.karumi:dexter", version.ref = "dexter" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
@@ -30,6 +32,7 @@ appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "a
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 activity = { group = "androidx.activity", name = "activity", version.ref = "activity" }
 constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
+material3 = { module = "androidx.compose.material3:material3" }
 play-services-maps = { group = "com.google.android.gms", name = "play-services-maps", version.ref = "playServicesMaps" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
 vectordrawable = { group = "androidx.vectordrawable", name = "vectordrawable", version.ref = "vectordrawable" }

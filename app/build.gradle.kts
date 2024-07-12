@@ -7,6 +7,11 @@ android {
     compileSdk = 34
 
 
+    buildFeatures {
+        viewBinding = true
+        dataBinding = true
+    }
+
     defaultConfig {
         applicationId = "com.example.ipollusense"
         minSdk = 22
@@ -44,4 +49,8 @@ dependencies {
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
     implementation (libs.dexter)
+    implementation("com.google.android.material:material:1.9.0")
+    implementation ("com.github.PhilJay:MPAndroidChart:v3.1.0")
+    implementation ("com.github.AnyChart:AnyChart-Android:1.1.5")
+    implementation (files("libs/MPAndroidChart-3.1.0.jar"))
 }

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="RemoteRepositoriesConfiguration">
+    <remote-repository>
+      <option name="id" value="central" />
+      <option name="name" value="Maven Central repository" />
+      <option name="url" value="https://repo1.maven.org/maven2" />
+    </remote-repository>
+    <remote-repository>
+      <option name="id" value="jboss.community" />
+      <option name="name" value="JBoss Community repository" />
+      <option name="url" value="https://repository.jboss.org/nexus/content/repositories/public/" />
+    </remote-repository>
+    <remote-repository>
+      <option name="id" value="637bceae-bac6-4777-83de-a3fdbba3ef90" />
+      <option name="name" value="637bceae-bac6-4777-83de-a3fdbba3ef90" />
+      <option name="url" value="https://com.github.mikephil.charting.charts.LineChart" />
+    </remote-repository>
+    <remote-repository>
+      <option name="id" value="905e83d7-f3a3-4ff6-85f0-3454f58473a1" />
+      <option name="name" value="905e83d7-f3a3-4ff6-85f0-3454f58473a1" />
+      <option name="url" value="https://github.com/AnyChart/AnyChart-Android" />
+    </remote-repository>
+  </component>
+</project>
