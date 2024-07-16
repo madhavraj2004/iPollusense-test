@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.google.gms.google.services)
 }
 
 android {
@@ -14,7 +15,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.ipollusense"
-        minSdk = 22
+        minSdk = 23
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
@@ -53,4 +54,11 @@ dependencies {
     implementation ("com.github.PhilJay:MPAndroidChart:v3.1.0")
     implementation ("com.github.AnyChart:AnyChart-Android:1.1.5")
     implementation (files("libs/MPAndroidChart-3.1.0.jar"))
+    implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
+
+    // Firebase Authentication library using the BoM
+    // Example without BOM (not recommended if using BOM)
+    implementation("com.google.firebase:firebase-auth:23.0.0")
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
+
 }

@@ -40,6 +40,8 @@
         <!-- Other activities -->
         <activity android:name=".FeaturesActivity"/>
         <activity android:name=".LoginActivity"/>
+        android:name=".MyApplication">
+        <activity android:name=".RegisterActivity"/>
         <activity android:name=".PermissionsActivity"/>
 
         <!-- MainActivity with fragments -->
