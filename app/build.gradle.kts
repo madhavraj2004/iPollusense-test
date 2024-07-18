@@ -60,5 +60,7 @@ dependencies {
     // Example without BOM (not recommended if using BOM)
     implementation("com.google.firebase:firebase-auth:23.0.0")
     implementation("com.google.android.gms:play-services-auth:21.2.0")
-
+    implementation ("com.firebaseui:firebase-ui-auth:7.2.0")
+    implementation ("com.google.gms:google-services:4.3.10")
+    implementation ("com.google.firebase:firebase-database:20.0.6")
 }

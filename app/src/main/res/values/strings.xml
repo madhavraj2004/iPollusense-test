@@ -5,4 +5,6 @@
     <string name="start_updates">Start Updates</string>
     <string name="stop_updates">Stop Updates</string>
     <string name="get_last_location">Get Last Location</string>
+    <string name="default_web_client_id">274963849995-4eo0g9ks2vj3s90dpqbihdevupku88g2.apps.googleusercontent.com</string>
+
 </resources>

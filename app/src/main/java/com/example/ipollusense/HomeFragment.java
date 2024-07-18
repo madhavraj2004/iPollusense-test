@@ -1,7 +1,7 @@
 package com.example.ipollusense;
 
-import android.graphics.Color;
 import android.os.Bundle;
+import android.os.Handler;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -10,14 +10,6 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
-import com.anychart.AnyChart;
-import com.anychart.AnyChartView;
-import com.anychart.chart.common.dataentry.DataEntry;
-import com.anychart.chart.common.dataentry.ValueDataEntry;
-import com.anychart.charts.Cartesian;
-import com.anychart.enums.Anchor;
-import com.anychart.enums.HoverMode;
-import com.anychart.enums.Position;
 import com.example.ipollusense.databinding.FragmentHomeBinding;
 import com.github.mikephil.charting.charts.LineChart;
 import com.github.mikephil.charting.components.XAxis;
@@ -25,36 +17,39 @@ import com.github.mikephil.charting.components.YAxis;
 import com.github.mikephil.charting.data.Entry;
 import com.github.mikephil.charting.data.LineData;
 import com.github.mikephil.charting.data.LineDataSet;
-import com.github.mikephil.charting.interfaces.datasets.ILineDataSet;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-import java.util.Timer;
-import java.util.TimerTask;
 
 public class HomeFragment extends Fragment {
+
     private FragmentHomeBinding binding;
     private LineChart lineChart;
-    private AnyChartView anyChartView;
-    private List<Entry> temperatureEntries;
-    private List<Entry> humidityEntries;
-    private List<Entry> no2Entries;
-    private List<Entry> c2h5ohEntries;
-    private List<Entry> vocEntries;
-    private List<Entry> coEntries;
-    private List<Entry> pm1Entries;
-    private List<Entry> pm2_5Entries;
-    private List<Entry> pm10Entries;
-    private LineData lineData;
-    private Random random;
+    private DatabaseReference databaseReference;
+    private Handler handler = new Handler();
+    private Runnable dataUpdater;
+    private Random random = new Random();
+
+    private List<Entry> temperatureEntries = new ArrayList<>();
+    private List<Entry> humidityEntries = new ArrayList<>();
+    private List<Entry> no2Entries = new ArrayList<>();
+    private List<Entry> c2h5ohEntries = new ArrayList<>();
+    private List<Entry> vocEntries = new ArrayList<>();
+    private List<Entry> coEntries = new ArrayList<>();
+    private List<Entry> pm1Entries = new ArrayList<>();
+    private List<Entry> pm2_5Entries = new ArrayList<>();
+    private List<Entry> pm10Entries = new ArrayList<>();
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        if (binding == null) {
-            binding = FragmentHomeBinding.inflate(inflater, container, false);
-        }
+        binding = FragmentHomeBinding.inflate(inflater, container, false);
         return binding.getRoot();
     }
 
@@ -62,85 +57,97 @@ public class HomeFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // Initialize views and data structures
+        // Initialize Firebase Database reference
+        databaseReference = FirebaseDatabase.getInstance().getReference("sensorData");
+
+        // Initialize line chart
         lineChart = binding.lineChart;
-        anyChartView = binding.anyChartView;
-        random = new Random();
-
-        temperatureEntries = new ArrayList<>();
-        humidityEntries = new ArrayList<>();
-        no2Entries = new ArrayList<>();
-        c2h5ohEntries = new ArrayList<>();
-        vocEntries = new ArrayList<>();
-        coEntries = new ArrayList<>();
-        pm1Entries = new ArrayList<>();
-        pm2_5Entries = new ArrayList<>();
-        pm10Entries = new ArrayList<>();
-
         setupLineChart();
-        setupAnyChart();
-        updateSensorValues();
-        updateLineChart();
 
-        // Start periodic sensor value updates
-        startSensorValueUpdater();
+        // Retrieve data from Firebase and plot on line chart
+        databaseReference.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                temperatureEntries.clear();
+                humidityEntries.clear();
+                no2Entries.clear();
+                c2h5ohEntries.clear();
+                vocEntries.clear();
+                coEntries.clear();
+                pm1Entries.clear();
+                pm2_5Entries.clear();
+                pm10Entries.clear();
+
+                for (DataSnapshot dataSnapshot : snapshot.getChildren()) {
+                    SensorData sensorData = dataSnapshot.getValue(SensorData.class);
+                    if (sensorData != null) {
+                        long currentTime = System.currentTimeMillis();
+                        float timeInHours = (currentTime % (24 * 3600 * 1000L)) / (3600 * 1000F);
+
+                        temperatureEntries.add(new Entry(timeInHours, (float) sensorData.temperature));
+                        humidityEntries.add(new Entry(timeInHours, (float) sensorData.humidity));
+                        no2Entries.add(new Entry(timeInHours, sensorData.no2));
+                        c2h5ohEntries.add(new Entry(timeInHours, sensorData.c2h5oh));
+                        vocEntries.add(new Entry(timeInHours, sensorData.voc));
+                        coEntries.add(new Entry(timeInHours, sensorData.co));
+                        pm1Entries.add(new Entry(timeInHours, sensorData.pm1));
+                        pm2_5Entries.add(new Entry(timeInHours, sensorData.pm2_5));
+                        pm10Entries.add(new Entry(timeInHours, sensorData.pm10));
+                    }
+                }
+
+                updateLineChart();
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                // Handle possible errors.
+            }
+        });
+
+        // Schedule data updates every 10 seconds
+        dataUpdater = new Runnable() {
+            @Override
+            public void run() {
+                updateSensorValues();
+                handler.postDelayed(this, 10000);
+            }
+        };
+        handler.post(dataUpdater);
     }
 
     private void setupLineChart() {
         lineChart.getDescription().setEnabled(false);
-        lineChart.setTouchEnabled(true);
-        lineChart.setDragEnabled(true);
-        lineChart.setScaleEnabled(true);
-        lineChart.setPinchZoom(true);
+        lineChart.setDrawGridBackground(false);
 
         XAxis xAxis = lineChart.getXAxis();
         xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
         xAxis.setGranularity(1f);
-        xAxis.setLabelCount(24);
-        xAxis.setValueFormatter(new com.github.mikephil.charting.formatter.ValueFormatter() {
-            @Override
-            public String getFormattedValue(float value) {
-                int hours = (int) value / 6;
-                int minutes = (int) ((value % 6) * 10);
-                return String.format("%02d:%02d", hours, minutes);
-            }
-        });
+        xAxis.setDrawGridLines(false);
 
         YAxis leftAxis = lineChart.getAxisLeft();
-        leftAxis.setDrawGridLines(true);
+        leftAxis.setDrawGridLines(false);
+
         YAxis rightAxis = lineChart.getAxisRight();
         rightAxis.setEnabled(false);
+
+        lineChart.getLegend().setEnabled(true);
     }
 
-    private void setupAnyChart() {
-        Cartesian barChart = AnyChart.column();
-        List<DataEntry> data = new ArrayList<>();
-        data.add(new ValueDataEntry("NO2", random.nextInt(100)));
-        data.add(new ValueDataEntry("C2H5OH", random.nextInt(100)));
-        data.add(new ValueDataEntry("VOC", random.nextInt(100)));
-        data.add(new ValueDataEntry("CO", random.nextInt(100)));
-        data.add(new ValueDataEntry("PM2.5", random.nextInt(100)));
+    private void updateLineChart() {
+        LineDataSet temperatureDataSet = new LineDataSet(temperatureEntries, "Temperature");
+        LineDataSet humidityDataSet = new LineDataSet(humidityEntries, "Humidity");
+        LineDataSet no2DataSet = new LineDataSet(no2Entries, "NO2");
+        LineDataSet c2h5ohDataSet = new LineDataSet(c2h5ohEntries, "C2H5OH");
+        LineDataSet vocDataSet = new LineDataSet(vocEntries, "VOC");
+        LineDataSet coDataSet = new LineDataSet(coEntries, "CO");
+        LineDataSet pm1DataSet = new LineDataSet(pm1Entries, "PM1");
+        LineDataSet pm2_5DataSet = new LineDataSet(pm2_5Entries, "PM2.5");
+        LineDataSet pm10DataSet = new LineDataSet(pm10Entries, "PM10");
 
-        barChart.data(data);
-
-        barChart.title("Pollutant Comparison");
-        barChart.labels().enabled(true);
-        barChart.labels().position("right");
-
-        barChart.yScale().minimum(0);
-        barChart.yScale().maximum(100);
-
-        barChart.animation(true);
-        barChart.tooltip()
-                .position(Position.RIGHT_CENTER)
-                .anchor(Anchor.LEFT_CENTER)
-                .offsetX(5d)
-                .offsetY(5d)
-                .format("{%Value}%");
-
-        barChart.interactivity().hoverMode(HoverMode.BY_X);
-
-        anyChartView.setChart(barChart);
+        LineData lineData = new LineData(temperatureDataSet, humidityDataSet, no2DataSet, c2h5ohDataSet, vocDataSet, coDataSet, pm1DataSet, pm2_5DataSet, pm10DataSet);
+        lineChart.setData(lineData);
+        lineChart.invalidate(); // Refresh the chart
     }
 
     private void updateSensorValues() {
@@ -154,6 +161,10 @@ public class HomeFragment extends Fragment {
         int pm1 = 30 + random.nextInt(60 - 30);
         int pm2_5 = 50 + random.nextInt(80 - 50);
         int pm10 = 70 + random.nextInt(110 - 70);
+
+        // Push data to Firebase
+        SensorData sensorData = new SensorData(temperature, humidity, no2, c2h5oh, voc, co, pm1, pm2_5, pm10);
+        databaseReference.push().setValue(sensorData);
 
         // Update UI with sensor values
         binding.textTemperature.setText("Temperature: " + String.format("%.2f", temperature) + " °C");
@@ -181,127 +192,40 @@ public class HomeFragment extends Fragment {
         pm2_5Entries.add(new Entry(timeInHours, pm2_5));
         pm10Entries.add(new Entry(timeInHours, pm10));
 
-        // Update line chart with new data
         updateLineChart();
     }
 
-    private void updateLineChart() {
-        List<ILineDataSet> dataSets = new ArrayList<>();
-
-        LineDataSet temperatureDataSet = new LineDataSet(temperatureEntries, "Temperature");
-        temperatureDataSet.setColor(Color.RED);
-        temperatureDataSet.setCircleColor(Color.RED);
-        temperatureDataSet.setLineWidth(2f);
-        temperatureDataSet.setCircleRadius(4f);
-        temperatureDataSet.setDrawCircleHole(false);
-        temperatureDataSet.setValueTextSize(10f);
-        temperatureDataSet.setValueTextColor(Color.RED);
-        dataSets.add(temperatureDataSet);
-
-        LineDataSet humidityDataSet = new LineDataSet(humidityEntries, "Humidity");
-        humidityDataSet.setColor(Color.BLUE);
-        humidityDataSet.setCircleColor(Color.BLUE);
-        humidityDataSet.setLineWidth(2f);
-        humidityDataSet.setCircleRadius(4f);
-        humidityDataSet.setDrawCircleHole(false);
-        humidityDataSet.setValueTextSize(10f);
-        humidityDataSet.setValueTextColor(Color.BLUE);
-        dataSets.add(humidityDataSet);
-
-        LineDataSet no2DataSet = new LineDataSet(no2Entries, "NO2");
-        no2DataSet.setColor(Color.GREEN);
-        no2DataSet.setCircleColor(Color.GREEN);
-        no2DataSet.setLineWidth(2f);
-        no2DataSet.setCircleRadius(4f);
-        no2DataSet.setDrawCircleHole(false);
-        no2DataSet.setValueTextSize(10f);
-        no2DataSet.setValueTextColor(Color.GREEN);
-        dataSets.add(no2DataSet);
-
-        LineDataSet c2h5ohDataSet = new LineDataSet(c2h5ohEntries, "C2H5OH");
-        c2h5ohDataSet.setColor(Color.MAGENTA);
-        c2h5ohDataSet.setCircleColor(Color.MAGENTA);
-        c2h5ohDataSet.setLineWidth(2f);
-        c2h5ohDataSet.setCircleRadius(4f);
-        c2h5ohDataSet.setDrawCircleHole(false);
-        c2h5ohDataSet.setValueTextSize(10f);
-        c2h5ohDataSet.setValueTextColor(Color.MAGENTA);
-        dataSets.add(c2h5ohDataSet);
-
-        LineDataSet vocDataSet = new LineDataSet(vocEntries, "VOC");
-        vocDataSet.setColor(Color.CYAN);
-        vocDataSet.setCircleColor(Color.CYAN);
-        vocDataSet.setLineWidth(2f);
-        vocDataSet.setCircleRadius(4f);
-        vocDataSet.setDrawCircleHole(false);
-        vocDataSet.setValueTextSize(10f);
-        vocDataSet.setValueTextColor(Color.CYAN);
-        dataSets.add(vocDataSet);
-
-        LineDataSet coDataSet = new LineDataSet(coEntries, "CO");
-        coDataSet.setColor(Color.YELLOW);
-        coDataSet.setCircleColor(Color.YELLOW);
-        coDataSet.setLineWidth(2f);
-        coDataSet.setCircleRadius(4f);
-        coDataSet.setDrawCircleHole(false);
-        coDataSet.setValueTextSize(10f);
-        coDataSet.setValueTextColor(Color.YELLOW);
-        dataSets.add(coDataSet);
-
-        LineDataSet pm1DataSet = new LineDataSet(pm1Entries, "PM1");
-        pm1DataSet.setColor(Color.GRAY);
-        pm1DataSet.setCircleColor(Color.GRAY);
-        pm1DataSet.setLineWidth(2f);
-        pm1DataSet.setCircleRadius(4f);
-        pm1DataSet.setDrawCircleHole(false);
-        pm1DataSet.setValueTextSize(10f);
-        pm1DataSet.setValueTextColor(Color.GRAY);
-        dataSets.add(pm1DataSet);
-
-        LineDataSet pm2_5DataSet = new LineDataSet(pm2_5Entries, "PM2.5");
-        pm2_5DataSet.setColor(Color.LTGRAY);
-        pm2_5DataSet.setCircleColor(Color.LTGRAY);
-        pm2_5DataSet.setLineWidth(2f);
-        pm2_5DataSet.setCircleRadius(4f);
-        pm2_5DataSet.setDrawCircleHole(false);
-        pm2_5DataSet.setValueTextSize(10f);
-        pm2_5DataSet.setValueTextColor(Color.LTGRAY);
-        dataSets.add(pm2_5DataSet);
-
-        LineDataSet pm10DataSet = new LineDataSet(pm10Entries, "PM10");
-        pm10DataSet.setColor(Color.DKGRAY);
-        pm10DataSet.setCircleColor(Color.DKGRAY);
-        pm10DataSet.setLineWidth(2f);
-        pm10DataSet.setCircleRadius(4f);
-        pm10DataSet.setDrawCircleHole(false);
-        pm10DataSet.setValueTextSize(10f);
-        pm10DataSet.setValueTextColor(Color.DKGRAY);
-        dataSets.add(pm10DataSet);
-
-        lineData = new LineData(dataSets);
-        lineChart.setData(lineData);
-        lineChart.invalidate(); // Refresh the chart with new data
-    }
-
-    private void startSensorValueUpdater() {
-        Timer timer = new Timer();
-        timer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                if (getActivity() != null && binding != null) { // Check if binding isvalid
-                    getActivity().runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            updateSensorValues();
-                        }
-                    });
-                }
-            }
-        }, 0, 5000);
-    }
     @Override
     public void onDestroyView() {
         super.onDestroyView();
+        handler.removeCallbacks(dataUpdater);
         binding = null;
+    }
+
+    public static class SensorData {
+        public double temperature;
+        public double humidity;
+        public int no2;
+        public int c2h5oh;
+        public int voc;
+        public int co;
+        public int pm1;
+        public int pm2_5;
+        public int pm10;
+
+        public SensorData() {
+        }
+
+        public SensorData(double temperature, double humidity, int no2, int c2h5oh, int voc, int co, int pm1, int pm2_5, int pm10) {
+            this.temperature = temperature;
+            this.humidity = humidity;
+            this.no2 = no2;
+            this.c2h5oh = c2h5oh;
+            this.voc = voc;
+            this.co = co;
+            this.pm1 = pm1;
+            this.pm2_5 = pm2_5;
+            this.pm10 = pm10;
+        }
     }
 }
