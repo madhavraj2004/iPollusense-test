@@ -63,4 +63,5 @@ dependencies {
     implementation ("com.firebaseui:firebase-ui-auth:7.2.0")
     implementation ("com.google.gms:google-services:4.3.10")
     implementation ("com.google.firebase:firebase-database:20.0.6")
+
 }

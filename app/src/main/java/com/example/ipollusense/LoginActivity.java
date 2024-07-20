@@ -1,15 +1,19 @@
 package com.example.ipollusense;
 
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.CheckBox;
+import android.widget.EditText;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
@@ -94,8 +98,7 @@ public class LoginActivity extends AppCompatActivity {
         findViewById(R.id.textViewForgotPassword).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                // Handle forgot password
-                // Navigate to a forgot password screen or handle within this activity
+                showForgotPasswordDialog();
             }
         });
     }
@@ -124,8 +127,7 @@ public class LoginActivity extends AppCompatActivity {
                             Log.d(TAG, "signInWithEmail:success");
                             Toast.makeText(LoginActivity.this, "Authentication succeeded.",
                                     Toast.LENGTH_SHORT).show();
-                            startActivity(new Intent(LoginActivity.this, MainActivity.class));
-                            finish();
+                            checkAndNavigateToNextActivity();
                         } else {
                             // If sign in fails, display a message to the user.
                             Log.w(TAG, "signInWithEmail:failure", task.getException());
@@ -139,6 +141,51 @@ public class LoginActivity extends AppCompatActivity {
     private void signInWithGoogle() {
         Intent signInIntent = mGoogleSignInClient.getSignInIntent();
         startActivityForResult(signInIntent, RC_SIGN_IN);
+    }
+
+    private void showForgotPasswordDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        LayoutInflater inflater = getLayoutInflater();
+        View dialogView = inflater.inflate(R.layout.dialog_forgot_password, null);
+        builder.setView(dialogView);
+
+        final EditText editTextEmail = dialogView.findViewById(R.id.editTextEmail);
+
+        builder.setTitle("Forgot Password")
+                .setPositiveButton("Send", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        String email = editTextEmail.getText().toString().trim();
+                        if (TextUtils.isEmpty(email)) {
+                            Toast.makeText(LoginActivity.this, "Enter email address!", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        resetPassword(email);
+                    }
+                })
+                .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        dialog.dismiss();
+                    }
+                })
+                .create()
+                .show();
+    }
+
+    private void resetPassword(String email) {
+        mAuth.sendPasswordResetEmail(email)
+                .addOnCompleteListener(new OnCompleteListener<Void>() {
+                    @Override
+                    public void onComplete(@NonNull Task<Void> task) {
+                        if (task.isSuccessful()) {
+                            Toast.makeText(LoginActivity.this, "Password reset email sent.", Toast.LENGTH_SHORT).show();
+                        } else {
+                            Log.w(TAG, "sendPasswordResetEmail:failure", task.getException());
+                            Toast.makeText(LoginActivity.this, "Failed to send reset email.", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                });
     }
 
     @Override
@@ -171,8 +218,7 @@ public class LoginActivity extends AppCompatActivity {
                             // Sign in success, update UI with the signed-in user's information
                             Log.d(TAG, "signInWithCredential:success");
                             FirebaseUser user = mAuth.getCurrentUser();
-                            startActivity(new Intent(LoginActivity.this, MainActivity.class));
-                            finish();
+                            checkAndNavigateToNextActivity();
                         } else {
                             // If sign in fails, display a message to the user.
                             Log.w(TAG, "signInWithCredential:failure", task.getException());
@@ -181,5 +227,24 @@ public class LoginActivity extends AppCompatActivity {
                         }
                     }
                 });
+    }
+
+    private void checkAndNavigateToNextActivity() {
+        // Check if permissions are granted
+        if (!arePermissionsGranted()) {
+            // Navigate to PermissionsActivity
+            startActivity(new Intent(LoginActivity.this, PermissionsActivity.class));
+        } else {
+            // Permissions are already granted, navigate to MainActivity
+            startActivity(new Intent(LoginActivity.this, MainActivity.class));
+        }
+        finish(); // Finish LoginActivity to prevent returning to it when back button is pressed
+    }
+
+    private boolean arePermissionsGranted() {
+        // Implement your logic to check if permissions are granted
+        // Example: Check ACCESS_FINE_LOCATION permission
+        // Replace with your actual permission checks
+        return true; // Replace with actual check
     }
 }
