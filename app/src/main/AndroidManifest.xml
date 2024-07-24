@@ -40,6 +40,8 @@
         </activity>
 
         <!-- Other activities -->
+        <activity android:name=".ChatbotActivity" />
+
         <activity android:name=".FeaturesActivity"/>
         <activity android:name=".LoginActivity"/>
         android:name=".MyApplication">
