@@ -55,13 +55,13 @@ dependencies {
     implementation ("com.github.AnyChart:AnyChart-Android:1.1.5")
     implementation (files("libs/MPAndroidChart-3.1.0.jar"))
     implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
-
-    // Firebase Authentication library using the BoM
-    // Example without BOM (not recommended if using BOM)
     implementation("com.google.firebase:firebase-auth:23.0.0")
     implementation("com.google.android.gms:play-services-auth:21.2.0")
     implementation ("com.firebaseui:firebase-ui-auth:7.2.0")
     implementation ("com.google.gms:google-services:4.3.10")
     implementation ("com.google.firebase:firebase-database:20.0.6")
+    implementation ("com.polidea.rxandroidble3:rxandroidble:1.18.1")
+    implementation ("io.reactivex.rxjava3:rxandroid:3.0.1")
+    implementation ("androidx.lifecycle:lifecycle-extensions:2.2.0")
 
 }

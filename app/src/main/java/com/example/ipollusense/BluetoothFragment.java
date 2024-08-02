@@ -1,201 +1,253 @@
 package com.example.ipollusense;
 
-import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothDevice;
-import android.bluetooth.BluetoothGatt;
-import android.bluetooth.BluetoothGattCallback;
-import android.bluetooth.BluetoothGattCharacteristic;
-import android.bluetooth.BluetoothManager;
-import android.bluetooth.BluetoothProfile;
-import android.bluetooth.le.BluetoothLeScanner;
-import android.bluetooth.le.ScanCallback;
-import android.bluetooth.le.ScanResult;
-import android.content.Context;
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.ParcelUuid;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.ListView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
-import com.example.ipollusense.R;
+import com.polidea.rxandroidble3.RxBleClient;
+import com.polidea.rxandroidble3.RxBleConnection;
+import com.polidea.rxandroidble3.RxBleDevice;
+import com.polidea.rxandroidble3.RxBleScanResult;
 
-import java.io.UnsupportedEncodingException;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
+
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
+import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.disposables.Disposable;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 
 public class BluetoothFragment extends Fragment {
 
-    private static final String TAG = "BluetoothFragment";
-    private BluetoothAdapter bluetoothAdapter;
-    private BluetoothLeScanner bluetoothLeScanner;
-    private BluetoothGatt bluetoothGatt;
-    private Handler handler;
-    private boolean scanning;
-    private static final long SCAN_PERIOD = 10000; // 10 seconds
+    private static final int PERMISSION_REQUEST_CODE = 1;
+    private static final String CHARACTERISTIC_UUID = "0000fef4-0000-1000-8000-00805f9b34fb";
+    private static final String TARGET_MAC_ADDRESS = "7C:DF:A1:EE:D4:96";
+    private static final long READ_INTERVAL_MS = 5000; // 5 seconds
 
     private TextView statusTextView;
-    private ListView deviceListView;
-    private List<BluetoothDevice> devices;
-    private ArrayAdapter<BluetoothDevice> deviceListAdapter;
+    private TextView dataTextView;
+    private RecyclerView devicesRecyclerView;
+    private DeviceAdapter deviceAdapter;
+    private final List<RxBleDevice> deviceList = new ArrayList<>();
 
-    private final BluetoothGattCallback gattCallback = new BluetoothGattCallback() {
-        @Override
-        public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
-            super.onConnectionStateChange(gatt, status, newState);
-            if (newState == BluetoothProfile.STATE_CONNECTED) {
-                Log.d(TAG, "Connected to GATT server.");
-                // Handle connected state
-            } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                Log.d(TAG, "Disconnected from GATT server.");
-                // Handle disconnected state
-            }
-        }
+    private RxBleClient rxBleClient;
+    private RxBleDevice selectedDevice;
+    private RxBleConnection connection;
+    private final CompositeDisposable compositeDisposable = new CompositeDisposable();
+    private SharedViewModel sharedViewModel;
+    private Disposable readDisposable;
+    private Disposable connectDisposable;
 
-        @Override
-        public void onServicesDiscovered(BluetoothGatt gatt, int status) {
-            super.onServicesDiscovered(gatt, status);
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                // Handle successful service discovery
-            } else {
-                Log.w(TAG, "onServicesDiscovered received: " + status);
-            }
-        }
-
-        @Override
-        public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-            super.onCharacteristicRead(gatt, characteristic, status);
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                // Handle successful characteristic read
-                try {
-                    String jsonString = new String(characteristic.getValue(), "UTF-8");
-                    Log.d(TAG, "Received data: " + jsonString);
-                    // Update UI with received data
-                } catch (UnsupportedEncodingException e) {
-                    Log.e(TAG, "Error converting bytes to string: " + e.getMessage());
-                }
-            } else {
-                Log.w(TAG, "onCharacteristicRead received: " + status);
-            }
-        }
-    };
-
-    private final ScanCallback scanCallback = new ScanCallback() {
-        @Override
-        public void onScanResult(int callbackType, ScanResult result) {
-            super.onScanResult(callbackType, result);
-            BluetoothDevice device = result.getDevice();
-            if (!devices.contains(device)) {
-                devices.add(device);
-                deviceListAdapter.notifyDataSetChanged();
-            }
-        }
-
-        @Override
-        public void onScanFailed(int errorCode) {
-            super.onScanFailed(errorCode);
-            Log.e(TAG, "Scan failed with error code: " + errorCode);
-        }
-    };
-
+    @Nullable
     @Override
-    public void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        final BluetoothManager bluetoothManager = (BluetoothManager) requireActivity().getSystemService(Context.BLUETOOTH_SERVICE);
-        if (bluetoothManager != null) {
-            bluetoothAdapter = bluetoothManager.getAdapter();
-            bluetoothLeScanner = bluetoothAdapter.getBluetoothLeScanner();
-        } else {
-            Log.e(TAG, "Unable to initialize BluetoothManager.");
-        }
-        handler = new Handler();
-        devices = new ArrayList<>();
-        deviceListAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_list_item_1, devices);
-    }
-
-    @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_bluetooth, container, false);
-        statusTextView = view.findViewById(R.id.statusTextView);
-        deviceListView = view.findViewById(R.id.listViewDevices);
-        deviceListView.setAdapter(deviceListAdapter);
-        deviceListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-            @Override
-            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                BluetoothDevice device = devices.get(position);
-                connectToDevice(device);
-            }
-        });
 
-        Button scanButton = view.findViewById(R.id.btn_scan);
-        scanButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                scanDevices();
-            }
-        });
+        statusTextView = view.findViewById(R.id.statusTextView);
+        dataTextView = view.findViewById(R.id.label1);
+        devicesRecyclerView = view.findViewById(R.id.recyclerView);
+        devicesRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        deviceAdapter = new DeviceAdapter(deviceList, this::onDeviceSelected);
+        devicesRecyclerView.setAdapter(deviceAdapter);
+
+        Button scanButton = view.findViewById(R.id.scanButton);
+        Button connectButton = view.findViewById(R.id.connectButton);
+
+        scanButton.setOnClickListener(v -> startScan());
+        connectButton.setOnClickListener(v -> connectToDevice());
+
+        // Initialize RxBleClient and ViewModel
+        rxBleClient = RxBleClient.create(requireContext());
+        sharedViewModel = new ViewModelProvider(requireActivity()).get(SharedViewModel.class);
+
+        // Check and request permissions
+        checkPermissions();
 
         return view;
     }
 
-    private void scanDevices() {
-        if (!scanning) {
-            handler.postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    stopScan();
-                }
-            }, SCAN_PERIOD);
-            devices.clear();
-            deviceListAdapter.notifyDataSetChanged();
-            bluetoothLeScanner.startScan(scanCallback);
-            scanning = true;
-            statusTextView.setText("Scanning...");
-            Log.d(TAG, "Scanning started.");
-        } else {
-            Log.d(TAG, "Scan already in progress.");
-        }
-    }
-
-    private void stopScan() {
-        if (scanning) {
-            bluetoothLeScanner.stopScan(scanCallback);
-            scanning = false;
-            statusTextView.setText("Scan stopped.");
-            Log.d(TAG, "Scan stopped.");
-        } else {
-            Log.d(TAG, "No scan to stop.");
-        }
-    }
-
-    private void connectToDevice(BluetoothDevice device) {
-        if (bluetoothGatt != null) {
-            bluetoothGatt.close();
-            bluetoothGatt = null;
-        }
-        bluetoothGatt = device.connectGatt(requireContext(), false, gattCallback);
-        Log.d(TAG, "Connecting to device: " + device.getName() + " - " + device.getAddress());
-        statusTextView.setText("Connecting to " + device.getName() + "...");
+    @Override
+    public void onResume() {
+        super.onResume();
+        startScan();
     }
 
     @Override
     public void onPause() {
         super.onPause();
         stopScan();
-        if (bluetoothGatt != null) {
-            bluetoothGatt.close();
-            bluetoothGatt = null;
+        if (readDisposable != null && !readDisposable.isDisposed()) {
+            readDisposable.dispose();
         }
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        compositeDisposable.clear(); // Clear all disposables
+    }
+
+    private void checkPermissions() {
+        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(requireActivity(), new String[]{
+                    Manifest.permission.BLUETOOTH_SCAN,
+                    Manifest.permission.BLUETOOTH_CONNECT,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+            }, PERMISSION_REQUEST_CODE);
+        } else {
+            startScan();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                startScan();
+            } else {
+                statusTextView.setText("Permissions denied.");
+            }
+        }
+    }
+
+    private void startScan() {
+        stopScan(); // Stop any ongoing scan
+
+        statusTextView.setText("Scanning...");
+        Disposable scanDisposable = rxBleClient.scanBleDevices()
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(this::onScanResult, this::onScanError);
+
+        compositeDisposable.add(scanDisposable);
+    }
+
+    private void onScanResult(RxBleScanResult scanResult) {
+        RxBleDevice device = scanResult.getBleDevice();
+
+        if (TARGET_MAC_ADDRESS.equals(device.getMacAddress())) {
+            selectedDevice = device;
+            connectToDevice();
+        } else if (!deviceList.contains(device)) {
+            deviceList.add(device);
+            deviceAdapter.notifyDataSetChanged();
+        }
+    }
+
+    private void onScanError(Throwable throwable) {
+        statusTextView.setText("Scan failed.");
+        Log.e("BLE", "Scan failed: " + throwable.toString());
+    }
+
+    private void stopScan() {
+        compositeDisposable.clear(); // Dispose of any previous scan subscription
+    }
+
+    private void connectToDevice() {
+        if (selectedDevice == null) {
+            statusTextView.setText("No device selected.");
+            return;
+        }
+
+        statusTextView.setText("Connecting to " + selectedDevice.getName() + "...");
+        connectDisposable = selectedDevice.establishConnection(false)
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(this::onConnectionEstablished, this::onConnectionFailed);
+
+        compositeDisposable.add(connectDisposable);
+    }
+
+    private void onConnectionEstablished(RxBleConnection rxBleConnection) {
+        connection = rxBleConnection;
+        statusTextView.setText("Connected to " + selectedDevice.getName());
+
+        // Start periodic reading of characteristic
+        readDisposable = Schedulers.io().createWorker().schedulePeriodically(() -> {
+            if (connection != null) {
+                connection.readCharacteristic(UUID.fromString(CHARACTERISTIC_UUID))
+                        .observeOn(AndroidSchedulers.mainThread())
+                        .subscribe(this::onCharacteristicRead, this::onCharacteristicReadFailed);
+            }
+        }, 0, READ_INTERVAL_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
+
+        compositeDisposable.add(readDisposable);
+    }
+
+    private void onConnectionFailed(Throwable throwable) {
+        statusTextView.setText("Connection failed.");
+        Log.e("BLE", "Connection failed: " + throwable.toString());
+    }
+
+    private void onCharacteristicRead(byte[] bytes) {
+        String jsonString = new String(bytes);
+        Log.d("BLE", "Data received: " + jsonString);
+        updateUIWithData(jsonString);
+    }
+
+    private void onCharacteristicReadFailed(Throwable throwable) {
+        statusTextView.setText("Failed to read characteristic.");
+        Log.e("BLE", "Failed to read characteristic: " + throwable.toString());
+    }
+
+    private void updateUIWithData(String jsonString) {
+        try {
+            JSONObject jsonObject = new JSONObject(jsonString);
+            double temperature = jsonObject.getDouble("temperature");
+            double humidity = jsonObject.getDouble("humidity");
+            int no2 = jsonObject.getInt("no2");
+            int c2h5oh = jsonObject.getInt("c2h5oh");
+            int voc = jsonObject.getInt("voc");
+            int co = jsonObject.getInt("co");
+            int pm1 = jsonObject.getInt("pm1");
+            int pm2_5 = jsonObject.getInt("pm2_5");
+            int pm10 = jsonObject.getInt("pm10");
+
+            // Update dataTextView with received data
+            dataTextView.setText(
+                    "Temperature: " + temperature + "\n" +
+                            "Humidity: " + humidity + "\n" +
+                            "NO2: " + no2 + "\n" +
+                            "C2H5OH: " + c2h5oh + "\n" +
+                            "VOC: " + voc + "\n" +
+                            "CO: " + co + "\n" +
+                            "PM1: " + pm1 + "\n" +
+                            "PM2.5: " + pm2_5 + "\n" +
+                            "PM10: " + pm10
+            );
+
+            // Notify ViewModel of new sensor data
+            SensorData sensorData = new SensorData(temperature, humidity, no2, c2h5oh, voc, co, pm1, pm2_5, pm10);
+            sharedViewModel.setSensorData(sensorData);
+        } catch (JSONException e) {
+            statusTextView.setText("Failed to parse data.");
+            Log.e("BLE", "JSON parsing error: " + e.toString());
+        }
+    }
+
+    // Method to handle device selection
+    private void onDeviceSelected(RxBleDevice device) {
+        selectedDevice = device;
+        statusTextView.setText("Selected device: " + device.getName());
+        connectToDevice();
     }
 }
