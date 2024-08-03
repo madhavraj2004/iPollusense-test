@@ -1,6 +1,11 @@
 package com.example.ipollusense;
 
 import android.Manifest;
+import android.bluetooth.BluetoothAdapter;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.util.Log;
@@ -30,6 +35,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
@@ -42,6 +48,7 @@ public class BluetoothFragment extends Fragment {
     private static final String CHARACTERISTIC_UUID = "0000fef4-0000-1000-8000-00805f9b34fb";
     private static final String TARGET_MAC_ADDRESS = "7C:DF:A1:EE:D4:96";
     private static final long READ_INTERVAL_MS = 5000; // 5 seconds
+    private static final long RETRY_INTERVAL_MS = 3000; // 3 seconds
 
     private TextView statusTextView;
     private TextView dataTextView;
@@ -54,8 +61,12 @@ public class BluetoothFragment extends Fragment {
     private RxBleConnection connection;
     private final CompositeDisposable compositeDisposable = new CompositeDisposable();
     private SharedViewModel sharedViewModel;
-    private Disposable readDisposable;
+    private Disposable scanDisposable;
     private Disposable connectDisposable;
+    private Disposable readDisposable;
+    private Disposable retryConnectDisposable;
+
+    private final BluetoothReceiver bluetoothReceiver = new BluetoothReceiver();
 
     @Nullable
     @Override
@@ -82,22 +93,28 @@ public class BluetoothFragment extends Fragment {
         // Check and request permissions
         checkPermissions();
 
+        // Register BluetoothReceiver
+        IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
+        requireContext().registerReceiver(bluetoothReceiver, filter);
+
         return view;
     }
 
     @Override
     public void onResume() {
         super.onResume();
-        startScan();
+        if (BluetoothAdapter.getDefaultAdapter().isEnabled()) {
+            startScan();
+        }
     }
 
     @Override
     public void onPause() {
         super.onPause();
         stopScan();
-        if (readDisposable != null && !readDisposable.isDisposed()) {
-            readDisposable.dispose();
-        }
+        disposeIfNotNull(readDisposable);
+        disposeIfNotNull(retryConnectDisposable);
+        requireContext().unregisterReceiver(bluetoothReceiver);
     }
 
     @Override
@@ -135,7 +152,7 @@ public class BluetoothFragment extends Fragment {
         stopScan(); // Stop any ongoing scan
 
         statusTextView.setText("Scanning...");
-        Disposable scanDisposable = rxBleClient.scanBleDevices()
+        scanDisposable = rxBleClient.scanBleDevices()
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(this::onScanResult, this::onScanError);
 
@@ -160,7 +177,9 @@ public class BluetoothFragment extends Fragment {
     }
 
     private void stopScan() {
-        compositeDisposable.clear(); // Dispose of any previous scan subscription
+        if (scanDisposable != null && !scanDisposable.isDisposed()) {
+            scanDisposable.dispose();
+        }
     }
 
     private void connectToDevice() {
@@ -188,14 +207,26 @@ public class BluetoothFragment extends Fragment {
                         .observeOn(AndroidSchedulers.mainThread())
                         .subscribe(this::onCharacteristicRead, this::onCharacteristicReadFailed);
             }
-        }, 0, READ_INTERVAL_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
+        }, 0, READ_INTERVAL_MS, TimeUnit.MILLISECONDS);
 
         compositeDisposable.add(readDisposable);
+
+        // Stop retry connection attempt when connected successfully
+        disposeIfNotNull(retryConnectDisposable);
     }
 
     private void onConnectionFailed(Throwable throwable) {
-        statusTextView.setText("Connection failed.");
+        statusTextView.setText("Connection failed. Retrying in 3 seconds...");
         Log.e("BLE", "Connection failed: " + throwable.toString());
+
+        // Retry connection after a delay
+        retryConnectDisposable = Schedulers.io().createWorker().schedulePeriodically(() -> {
+            if (selectedDevice != null) {
+                connectToDevice();
+            }
+        }, RETRY_INTERVAL_MS, RETRY_INTERVAL_MS, TimeUnit.MILLISECONDS);
+
+        compositeDisposable.add(retryConnectDisposable);
     }
 
     private void onCharacteristicRead(byte[] bytes) {
@@ -222,32 +253,42 @@ public class BluetoothFragment extends Fragment {
             int pm2_5 = jsonObject.getInt("pm2_5");
             int pm10 = jsonObject.getInt("pm10");
 
-            // Update dataTextView with received data
-            dataTextView.setText(
-                    "Temperature: " + temperature + "\n" +
-                            "Humidity: " + humidity + "\n" +
-                            "NO2: " + no2 + "\n" +
-                            "C2H5OH: " + c2h5oh + "\n" +
-                            "VOC: " + voc + "\n" +
-                            "CO: " + co + "\n" +
-                            "PM1: " + pm1 + "\n" +
-                            "PM2.5: " + pm2_5 + "\n" +
-                            "PM10: " + pm10
-            );
-
-            // Notify ViewModel of new sensor data
             SensorData sensorData = new SensorData(temperature, humidity, no2, c2h5oh, voc, co, pm1, pm2_5, pm10);
-            sharedViewModel.setSensorData(sensorData);
+
+            String parsedData = String.format("Temperature: %.2f°C\nHumidity: %.2f%%\nNO2: %d ppb\nC2H5OH: %d ppb\nVOC: %d ppb\nCO: %d ppb\nPM1: %d µg/m³\nPM2.5: %d µg/m³\nPM10: %d µg/m³",
+                    temperature, humidity, no2, c2h5oh, voc, co, pm1, pm2_5, pm10);
+
+            dataTextView.setText(parsedData);
+            sharedViewModel.setSensorData(sensorData); // Update ViewModel with new SensorData
         } catch (JSONException e) {
             statusTextView.setText("Failed to parse data.");
-            Log.e("BLE", "JSON parsing error: " + e.toString());
+            Log.e("BLE", "JSON Parsing error: " + e.toString());
         }
     }
 
-    // Method to handle device selection
+
+    private void disposeIfNotNull(Disposable disposable) {
+        if (disposable != null && !disposable.isDisposed()) {
+            disposable.dispose();
+        }
+    }
+
     private void onDeviceSelected(RxBleDevice device) {
         selectedDevice = device;
-        statusTextView.setText("Selected device: " + device.getName());
         connectToDevice();
+    }
+
+    private class BluetoothReceiver extends BroadcastReceiver {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (BluetoothAdapter.ACTION_STATE_CHANGED.equals(intent.getAction())) {
+                int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
+                if (state == BluetoothAdapter.STATE_ON) {
+                    startScan();
+                } else if (state == BluetoothAdapter.STATE_OFF) {
+                    stopScan();
+                }
+            }
+        }
     }
 }

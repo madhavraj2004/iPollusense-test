@@ -4,7 +4,6 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -34,19 +33,19 @@ public class HomeFragment extends Fragment {
 
     private FragmentHomeBinding binding;
     private DatabaseReference databaseReference;
-
-    // MPAndroidChart variables
     private LineChart lineChart;
-
-    // AnyChart variables
     private AnyChartView anyChartView;
     private com.anychart.charts.Cartesian anyChart;
 
-    // Data lists for MPAndroidChart and AnyChart
-    private List<SensorData> sensorDataList = new ArrayList<>();
-
-    // TextViews for pollution parameters
-    private TextView textTemperature, textHumidity, textNO2, textC2H5OH, textVOC, textCO, textPM1, textPM2, textPM10;
+    private List<Entry> temperatureEntries = new ArrayList<>();
+    private List<Entry> humidityEntries = new ArrayList<>();
+    private List<Entry> no2Entries = new ArrayList<>();
+    private List<Entry> c2h5ohEntries = new ArrayList<>();
+    private List<Entry> vocEntries = new ArrayList<>();
+    private List<Entry> coEntries = new ArrayList<>();
+    private List<Entry> pm1Entries = new ArrayList<>();
+    private List<Entry> pm2_5Entries = new ArrayList<>();
+    private List<Entry> pm10Entries = new ArrayList<>();
 
     private SharedViewModel sharedViewModel;
 
@@ -61,46 +60,23 @@ public class HomeFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // Initialize ViewModel
         sharedViewModel = new ViewModelProvider(requireActivity()).get(SharedViewModel.class);
-
-        // Initialize Firebase Database reference
         databaseReference = FirebaseDatabase.getInstance().getReference("sensorData");
 
-        // Initialize MPAndroidChart
         lineChart = binding.lineChart;
         setupLineChart();
 
-        // Initialize AnyChart
         anyChartView = binding.anyChartView;
         anyChart = AnyChart.line();
         anyChartView.setChart(anyChart);
 
-        // Initialize TextViews for pollution parameters
-        textTemperature = binding.textTemperature;
-        textHumidity = binding.textHumidity;
-        textNO2 = binding.textNO2;
-        textC2H5OH = binding.textC2H5OH;
-        textVOC = binding.textVOC;
-        textCO = binding.textCO;
-        textPM1 = binding.textPM1;
-        textPM2 = binding.textPM2;
-        textPM10 = binding.textPM10;
-
-        // Observe sensor data from SharedViewModel
+        // Observe LiveData from ViewModel
         sharedViewModel.getSensorData().observe(getViewLifecycleOwner(), sensorData -> {
-            if (sensorData != null) {
-                // Add new data to the list
-                sensorDataList.add(sensorData);
-
-                // Update charts with new data
-                updateCharts();
-
-                // Update UI with new sensor data
-                updateCardViews(sensorData);
-
-                // Store data in Firebase
-                databaseReference.push().setValue(sensorData);
+            if (sensorData != null && sensorData instanceof SensorData) {
+                SensorData data = (SensorData) sensorData;
+                updateCharts(data);
+                updateCardViews(data);
+                databaseReference.push().setValue(data);
             }
         });
     }
@@ -126,66 +102,76 @@ public class HomeFragment extends Fragment {
         legend.setHorizontalAlignment(Legend.LegendHorizontalAlignment.CENTER);
     }
 
-    private void updateCharts() {
-        // Create lists for each parameter
-        List<Entry> temperatureEntries = new ArrayList<>();
-        List<Entry> humidityEntries = new ArrayList<>();
-        List<Entry> no2Entries = new ArrayList<>();
-        List<Entry> c2h5ohEntries = new ArrayList<>();
-        List<Entry> vocEntries = new ArrayList<>();
-        List<Entry> coEntries = new ArrayList<>();
-        List<Entry> pm1Entries = new ArrayList<>();
-        List<Entry> pm2_5Entries = new ArrayList<>();
-        List<Entry> pm10Entries = new ArrayList<>();
+    private void updateCharts(SensorData sensorData) {
+        // Add new entries to the lists
+        temperatureEntries.add(new Entry(temperatureEntries.size(), (float) sensorData.getTemperature()));
+        humidityEntries.add(new Entry(humidityEntries.size(), (float) sensorData.getHumidity()));
+        no2Entries.add(new Entry(no2Entries.size(), (float) sensorData.getNo2()));
+        c2h5ohEntries.add(new Entry(c2h5ohEntries.size(), (float) sensorData.getC2h5oh()));
+        vocEntries.add(new Entry(vocEntries.size(), (float) sensorData.getVoc()));
+        coEntries.add(new Entry(coEntries.size(), (float) sensorData.getCo()));
+        pm1Entries.add(new Entry(pm1Entries.size(), (float) sensorData.getPm1()));
+        pm2_5Entries.add(new Entry(pm2_5Entries.size(), (float) sensorData.getPm2_5()));
+        pm10Entries.add(new Entry(pm10Entries.size(), (float) sensorData.getPm10()));
 
-        // Fill the lists with sensor data
-        for (int i = 0; i < sensorDataList.size(); i++) {
-            SensorData data = sensorDataList.get(i);
-            temperatureEntries.add(new Entry(i, (float) data.getTemperature()));
-            humidityEntries.add(new Entry(i, (float) data.getHumidity()));
-            no2Entries.add(new Entry(i, (float) data.getNo2()));
-            c2h5ohEntries.add(new Entry(i, (float) data.getC2h5oh()));
-            vocEntries.add(new Entry(i, (float) data.getVoc()));
-            coEntries.add(new Entry(i, (float) data.getCo()));
-            pm1Entries.add(new Entry(i, (float) data.getPm1()));
-            pm2_5Entries.add(new Entry(i, (float) data.getPm2_5()));
-            pm10Entries.add(new Entry(i, (float) data.getPm10()));
-        }
+        // Update LineChart
+        updateLineChart();
 
-        // Update MPAndroidChart data
-        updateLineChart(temperatureEntries, humidityEntries, no2Entries, c2h5ohEntries, vocEntries, coEntries, pm1Entries, pm2_5Entries, pm10Entries);
+        // Update AnyChart
+        List<DataEntry> data = new ArrayList<>();
+        data.add(new ValueDataEntry("Temperature", sensorData.getTemperature()));
+        data.add(new ValueDataEntry("Humidity", sensorData.getHumidity()));
+        data.add(new ValueDataEntry("NO2", sensorData.getNo2()));
+        data.add(new ValueDataEntry("C2H5OH", sensorData.getC2h5oh()));
+        data.add(new ValueDataEntry("VOC", sensorData.getVoc()));
+        data.add(new ValueDataEntry("CO", sensorData.getCo()));
+        data.add(new ValueDataEntry("PM1", sensorData.getPm1()));
+        data.add(new ValueDataEntry("PM2.5", sensorData.getPm2_5()));
+        data.add(new ValueDataEntry("PM10", sensorData.getPm10()));
 
-        // Update AnyChart data
-        List<DataEntry> anyChartData = new ArrayList<>();
-        for (SensorData data : sensorDataList) {
-            anyChartData.add(new ValueDataEntry("Temperature", data.getTemperature()));
-            anyChartData.add(new ValueDataEntry("Humidity", data.getHumidity()));
-            anyChartData.add(new ValueDataEntry("NO2", data.getNo2()));
-            anyChartData.add(new ValueDataEntry("C2H5OH", data.getC2h5oh()));
-            anyChartData.add(new ValueDataEntry("VOC", data.getVoc()));
-            anyChartData.add(new ValueDataEntry("CO", data.getCo()));
-            anyChartData.add(new ValueDataEntry("PM1", data.getPm1()));
-            anyChartData.add(new ValueDataEntry("PM2.5", data.getPm2_5()));
-            anyChartData.add(new ValueDataEntry("PM10", data.getPm10()));
-        }
-
-        anyChart.data(anyChartData); // Use data() instead of line() for updating data
-        anyChart.title("Sensor Data");
+        anyChart.data(data);
+        anyChartView.setChart(anyChart);
     }
 
-    private void updateLineChart(List<Entry> temperatureEntries, List<Entry> humidityEntries,
-                                 List<Entry> no2Entries, List<Entry> c2h5ohEntries, List<Entry> vocEntries,
-                                 List<Entry> coEntries, List<Entry> pm1Entries, List<Entry> pm2_5Entries, List<Entry> pm10Entries) {
-        LineDataSet temperatureDataSet = createLineDataSet(temperatureEntries, "Temperature", getResources().getColor(R.color.chart_temperature));
-        LineDataSet humidityDataSet = createLineDataSet(humidityEntries, "Humidity", getResources().getColor(R.color.chart_humidity));
-        LineDataSet no2DataSet = createLineDataSet(no2Entries, "NO2", getResources().getColor(R.color.chart_no2));
-        LineDataSet c2h5ohDataSet = createLineDataSet(c2h5ohEntries, "C2H5OH", getResources().getColor(R.color.chart_c2h5oh));
-        LineDataSet vocDataSet = createLineDataSet(vocEntries, "VOC", getResources().getColor(R.color.chart_voc));
-        LineDataSet coDataSet = createLineDataSet(coEntries, "CO", getResources().getColor(R.color.chart_co));
-        LineDataSet pm1DataSet = createLineDataSet(pm1Entries, "PM1", getResources().getColor(R.color.chart_pm1));
-        LineDataSet pm2_5DataSet = createLineDataSet(pm2_5Entries, "PM2.5", getResources().getColor(R.color.chart_pm2_5));
-        LineDataSet pm10DataSet = createLineDataSet(pm10Entries, "PM10", getResources().getColor(R.color.chart_pm10));
+    private void updateLineChart() {
+        // Define datasets
+        LineDataSet temperatureDataSet = new LineDataSet(temperatureEntries, "Temperature");
+        temperatureDataSet.setColor(getResources().getColor(R.color.red));
+        temperatureDataSet.setLineWidth(2f);
 
+        LineDataSet humidityDataSet = new LineDataSet(humidityEntries, "Humidity");
+        humidityDataSet.setColor(getResources().getColor(R.color.blue));
+        humidityDataSet.setLineWidth(2f);
+
+        LineDataSet no2DataSet = new LineDataSet(no2Entries, "NO2");
+        no2DataSet.setColor(getResources().getColor(R.color.orange));
+        no2DataSet.setLineWidth(2f);
+
+        LineDataSet c2h5ohDataSet = new LineDataSet(c2h5ohEntries, "C2H5OH");
+        c2h5ohDataSet.setColor(getResources().getColor(R.color.green));
+        c2h5ohDataSet.setLineWidth(2f);
+
+        LineDataSet vocDataSet = new LineDataSet(vocEntries, "VOC");
+        vocDataSet.setColor(getResources().getColor(R.color.purple));
+        vocDataSet.setLineWidth(2f);
+
+        LineDataSet coDataSet = new LineDataSet(coEntries, "CO");
+        coDataSet.setColor(getResources().getColor(R.color.yellow));
+        coDataSet.setLineWidth(2f);
+
+        LineDataSet pm1DataSet = new LineDataSet(pm1Entries, "PM1");
+        pm1DataSet.setColor(getResources().getColor(R.color.brown));
+        pm1DataSet.setLineWidth(2f);
+
+        LineDataSet pm2_5DataSet = new LineDataSet(pm2_5Entries, "PM2.5");
+        pm2_5DataSet.setColor(getResources().getColor(R.color.cyan));
+        pm2_5DataSet.setLineWidth(2f);
+
+        LineDataSet pm10DataSet = new LineDataSet(pm10Entries, "PM10");
+        pm10DataSet.setColor(getResources().getColor(R.color.magenta));
+        pm10DataSet.setLineWidth(2f);
+
+        // Combine all datasets
         List<ILineDataSet> dataSets = new ArrayList<>();
         dataSets.add(temperatureDataSet);
         dataSets.add(humidityDataSet);
@@ -199,36 +185,19 @@ public class HomeFragment extends Fragment {
 
         LineData lineData = new LineData(dataSets);
         lineChart.setData(lineData);
-        lineChart.invalidate();
+        lineChart.invalidate(); // Refresh the chart
     }
 
-    private LineDataSet createLineDataSet(List<Entry> entries, String label, int color) {
-        LineDataSet dataSet = new LineDataSet(entries, label);
-        dataSet.setColor(color);
-        dataSet.setCircleColor(color);
-        dataSet.setLineWidth(2f);
-        dataSet.setCircleRadius(3f);
-        dataSet.setDrawCircleHole(false);
-        dataSet.setValueTextSize(10f);
-        dataSet.setDrawValues(false);
-        return dataSet;
-    }
-
-    private void updateCardViews(SensorData data) {
-        textTemperature.setText("Temp: " + data.getTemperature() + "°C");
-        textHumidity.setText("Humidity: " + data.getHumidity() + "%");
-        textNO2.setText("NO2: " + data.getNo2());
-        textC2H5OH.setText("C2H5OH: " + data.getC2h5oh());
-        textVOC.setText("VOC: " + data.getVoc());
-        textCO.setText("CO: " + data.getCo());
-        textPM1.setText("PM1: " + data.getPm1());
-        textPM2.setText("PM2.5: " + data.getPm2_5());
-        textPM10.setText("PM10: " + data.getPm10());
-    }
-
-    @Override
-    public void onDestroyView() {
-        super.onDestroyView();
-        binding = null; // Avoid memory leaks
+    private void updateCardViews(SensorData sensorData) {
+        // Ensure that the data types match the format specifiers
+        binding.textTemperature.setText(String.format("Temperature: %.2f°C", (float) sensorData.getTemperature()));
+        binding.textHumidity.setText(String.format("Humidity: %.2f%%", (float) sensorData.getHumidity()));
+        binding.textNO2.setText(String.format("NO2: %.2f µg/m³", (float) sensorData.getNo2()));
+        binding.textC2H5OH.setText(String.format("C2H5OH: %.2f µg/m³", (float) sensorData.getC2h5oh()));
+        binding.textVOC.setText(String.format("VOC: %.2f µg/m³", (float) sensorData.getVoc()));
+        binding.textCO.setText(String.format("CO: %.2f µg/m³", (float) sensorData.getCo()));
+        binding.textPM1.setText(String.format("PM1: %.2f µg/m³", (float) sensorData.getPm1()));
+        binding.textPM2.setText(String.format("PM2.5: %.2f µg/m³", (float) sensorData.getPm2_5()));
+        binding.textPM10.setText(String.format("PM10: %.2f µg/m³", (float) sensorData.getPm10()));
     }
 }
