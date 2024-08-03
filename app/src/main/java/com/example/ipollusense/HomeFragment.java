@@ -8,7 +8,6 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
-import androidx.lifecycle.ViewModelProvider;
 
 import com.anychart.AnyChart;
 import com.anychart.AnyChartView;
@@ -23,8 +22,11 @@ import com.github.mikephil.charting.data.Entry;
 import com.github.mikephil.charting.data.LineData;
 import com.github.mikephil.charting.data.LineDataSet;
 import com.github.mikephil.charting.interfaces.datasets.ILineDataSet;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -47,7 +49,7 @@ public class HomeFragment extends Fragment {
     private List<Entry> pm2_5Entries = new ArrayList<>();
     private List<Entry> pm10Entries = new ArrayList<>();
 
-    private SharedViewModel sharedViewModel;
+    private SharedPreferencesHelper sharedPreferencesHelper;
 
     @Nullable
     @Override
@@ -60,8 +62,8 @@ public class HomeFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        sharedViewModel = new ViewModelProvider(requireActivity()).get(SharedViewModel.class);
-        databaseReference = FirebaseDatabase.getInstance().getReference("sensorData");
+        sharedPreferencesHelper = new SharedPreferencesHelper(requireContext());
+        databaseReference = FirebaseDatabase.getInstance().getReference("users").child(sharedPreferencesHelper.getUserId()).child("data");
 
         lineChart = binding.lineChart;
         setupLineChart();
@@ -70,15 +72,50 @@ public class HomeFragment extends Fragment {
         anyChart = AnyChart.line();
         anyChartView.setChart(anyChart);
 
-        // Observe LiveData from ViewModel
-        sharedViewModel.getSensorData().observe(getViewLifecycleOwner(), sensorData -> {
-            if (sensorData != null && sensorData instanceof SensorData) {
-                SensorData data = (SensorData) sensorData;
-                updateCharts(data);
-                updateCardViews(data);
-                databaseReference.push().setValue(data);
-            }
-        });
+        fetchDataForLast24Hours();
+    }
+
+    private void fetchDataForLast24Hours() {
+        long oneDayAgo = System.currentTimeMillis() - 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+        databaseReference.orderByKey().startAt(String.valueOf(oneDayAgo)).endAt(String.valueOf(System.currentTimeMillis()))
+                .addValueEventListener(new ValueEventListener() {
+                    @Override
+                    public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                        temperatureEntries.clear();
+                        humidityEntries.clear();
+                        no2Entries.clear();
+                        c2h5ohEntries.clear();
+                        vocEntries.clear();
+                        coEntries.clear();
+                        pm1Entries.clear();
+                        pm2_5Entries.clear();
+                        pm10Entries.clear();
+
+                        for (DataSnapshot snapshot : dataSnapshot.getChildren()) {
+                            long timestamp = Long.parseLong(snapshot.getKey());
+                            SensorData data = snapshot.getValue(SensorData.class);
+
+                            if (data != null) {
+                                temperatureEntries.add(new Entry(timestamp, (float) data.getTemperature()));
+                                humidityEntries.add(new Entry(timestamp, (float) data.getHumidity()));
+                                no2Entries.add(new Entry(timestamp, (float) data.getNo2()));
+                                c2h5ohEntries.add(new Entry(timestamp, (float) data.getC2h5oh()));
+                                vocEntries.add(new Entry(timestamp, (float) data.getVoc()));
+                                coEntries.add(new Entry(timestamp, (float) data.getCo()));
+                                pm1Entries.add(new Entry(timestamp, (float) data.getPm1()));
+                                pm2_5Entries.add(new Entry(timestamp, (float) data.getPm2_5()));
+                                pm10Entries.add(new Entry(timestamp, (float) data.getPm10()));
+                            }
+                        }
+                        updateCharts();
+                    }
+
+                    @Override
+                    public void onCancelled(@NonNull DatabaseError databaseError) {
+                        // Handle possible errors.
+                    }
+                });
     }
 
     private void setupLineChart() {
@@ -102,39 +139,8 @@ public class HomeFragment extends Fragment {
         legend.setHorizontalAlignment(Legend.LegendHorizontalAlignment.CENTER);
     }
 
-    private void updateCharts(SensorData sensorData) {
-        // Add new entries to the lists
-        temperatureEntries.add(new Entry(temperatureEntries.size(), (float) sensorData.getTemperature()));
-        humidityEntries.add(new Entry(humidityEntries.size(), (float) sensorData.getHumidity()));
-        no2Entries.add(new Entry(no2Entries.size(), (float) sensorData.getNo2()));
-        c2h5ohEntries.add(new Entry(c2h5ohEntries.size(), (float) sensorData.getC2h5oh()));
-        vocEntries.add(new Entry(vocEntries.size(), (float) sensorData.getVoc()));
-        coEntries.add(new Entry(coEntries.size(), (float) sensorData.getCo()));
-        pm1Entries.add(new Entry(pm1Entries.size(), (float) sensorData.getPm1()));
-        pm2_5Entries.add(new Entry(pm2_5Entries.size(), (float) sensorData.getPm2_5()));
-        pm10Entries.add(new Entry(pm10Entries.size(), (float) sensorData.getPm10()));
-
+    private void updateCharts() {
         // Update LineChart
-        updateLineChart();
-
-        // Update AnyChart
-        List<DataEntry> data = new ArrayList<>();
-        data.add(new ValueDataEntry("Temperature", sensorData.getTemperature()));
-        data.add(new ValueDataEntry("Humidity", sensorData.getHumidity()));
-        data.add(new ValueDataEntry("NO2", sensorData.getNo2()));
-        data.add(new ValueDataEntry("C2H5OH", sensorData.getC2h5oh()));
-        data.add(new ValueDataEntry("VOC", sensorData.getVoc()));
-        data.add(new ValueDataEntry("CO", sensorData.getCo()));
-        data.add(new ValueDataEntry("PM1", sensorData.getPm1()));
-        data.add(new ValueDataEntry("PM2.5", sensorData.getPm2_5()));
-        data.add(new ValueDataEntry("PM10", sensorData.getPm10()));
-
-        anyChart.data(data);
-        anyChartView.setChart(anyChart);
-    }
-
-    private void updateLineChart() {
-        // Define datasets
         LineDataSet temperatureDataSet = new LineDataSet(temperatureEntries, "Temperature");
         temperatureDataSet.setColor(getResources().getColor(R.color.red));
         temperatureDataSet.setLineWidth(2f);
@@ -186,18 +192,19 @@ public class HomeFragment extends Fragment {
         LineData lineData = new LineData(dataSets);
         lineChart.setData(lineData);
         lineChart.invalidate(); // Refresh the chart
-    }
 
-    private void updateCardViews(SensorData sensorData) {
-        // Ensure that the data types match the format specifiers
-        binding.textTemperature.setText(String.format("Temperature: %.2f°C", (float) sensorData.getTemperature()));
-        binding.textHumidity.setText(String.format("Humidity: %.2f%%", (float) sensorData.getHumidity()));
-        binding.textNO2.setText(String.format("NO2: %.2f µg/m³", (float) sensorData.getNo2()));
-        binding.textC2H5OH.setText(String.format("C2H5OH: %.2f µg/m³", (float) sensorData.getC2h5oh()));
-        binding.textVOC.setText(String.format("VOC: %.2f µg/m³", (float) sensorData.getVoc()));
-        binding.textCO.setText(String.format("CO: %.2f µg/m³", (float) sensorData.getCo()));
-        binding.textPM1.setText(String.format("PM1: %.2f µg/m³", (float) sensorData.getPm1()));
-        binding.textPM2.setText(String.format("PM2.5: %.2f µg/m³", (float) sensorData.getPm2_5()));
-        binding.textPM10.setText(String.format("PM10: %.2f µg/m³", (float) sensorData.getPm10()));
+        // Update AnyChart
+        List<DataEntry> dataEntries = new ArrayList<>();
+        dataEntries.add(new ValueDataEntry("Temperature", temperatureEntries.size() > 0 ? temperatureEntries.get(temperatureEntries.size() - 1).getY() : 0));
+        dataEntries.add(new ValueDataEntry("Humidity", humidityEntries.size() > 0 ? humidityEntries.get(humidityEntries.size() - 1).getY() : 0));
+        dataEntries.add(new ValueDataEntry("NO2", no2Entries.size() > 0 ? no2Entries.get(no2Entries.size() - 1).getY() : 0));
+        dataEntries.add(new ValueDataEntry("C2H5OH", c2h5ohEntries.size() > 0 ? c2h5ohEntries.get(c2h5ohEntries.size() - 1).getY() : 0));
+        dataEntries.add(new ValueDataEntry("VOC", vocEntries.size() > 0 ? vocEntries.get(vocEntries.size() - 1).getY() : 0));
+        dataEntries.add(new ValueDataEntry("CO", coEntries.size() > 0 ? coEntries.get(coEntries.size() - 1).getY() : 0));
+        dataEntries.add(new ValueDataEntry("PM1", pm1Entries.size() > 0 ? pm1Entries.get(pm1Entries.size() - 1).getY() : 0));
+        dataEntries.add(new ValueDataEntry("PM2.5", pm2_5Entries.size() > 0 ? pm2_5Entries.get(pm2_5Entries.size() - 1).getY() : 0));
+        dataEntries.add(new ValueDataEntry("PM10", pm10Entries.size() > 0 ? pm10Entries.get(pm10Entries.size() - 1).getY() : 0));
+
+        anyChart.data(dataEntries);
     }
 }
