@@ -14,8 +14,7 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"/>
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
 
     <application
         android:allowBackup="true"
@@ -24,7 +23,8 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApp"
-        tools:ignore="ExtraText">
+        tools:ignore="ExtraText"
+        android:name=".MyApplication"> <!-- Set the custom Application class -->
 
         <meta-data
             android:name="com.google.android.geo.API_KEY"
@@ -41,12 +41,12 @@
 
         <!-- Other activities -->
         <activity android:name=".ChatbotActivity" />
-
         <activity android:name=".FeaturesActivity"/>
         <activity android:name=".LoginActivity"/>
-        android:name=".MyApplication">
         <activity android:name=".RegisterActivity"/>
         <activity android:name=".PermissionsActivity"/>
+        <activity android:name=".ProfileActivity"/>
+
 
         <!-- MainActivity with fragments -->
         <activity android:name=".MainActivity"
@@ -58,8 +58,20 @@
             </intent-filter>
         </activity>
 
-        <!-- HomeActivity (optional, remove if not needed) -->
+        <!-- Optionally add HomeActivity if needed -->
         <!-- <activity android:name=".HomeActivity"/> -->
+
+        <!-- Add a Service if needed for data sync -->
+        <!-- <service android:name=".DataSyncService"
+            android:exported="false"/> -->
+
+        <!-- Add a BroadcastReceiver if needed -->
+        <!-- <receiver android:name=".DataUpdateReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.example.ipollusense.DATA_UPDATED"/>
+            </intent-filter>
+        </receiver> -->
 
     </application>
 

@@ -1,7 +1,8 @@
 package com.example.ipollusense;
 
-import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.text.InputType;
 import android.text.TextUtils;
@@ -12,21 +13,19 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.auth.api.signin.GoogleSignInClient;
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.api.ApiException;
-import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.firebase.auth.AuthCredential;
-import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
@@ -35,6 +34,7 @@ public class LoginActivity extends AppCompatActivity {
 
     private static final String TAG = "LoginActivity";
     private static final int RC_SIGN_IN = 9001;
+    private static final int PERMISSION_REQUEST_CODE = 1001;
 
     private TextInputEditText editTextEmail, editTextPassword;
     private MaterialButton buttonLogin, buttonRegister, buttonGoogleSignIn;
@@ -65,27 +65,9 @@ public class LoginActivity extends AppCompatActivity {
         mGoogleSignInClient = GoogleSignIn.getClient(this, gso);
 
         // Set click listeners
-        buttonLogin.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                loginUser();
-            }
-        });
-
-        buttonRegister.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                // Start the registration activity
-                startActivity(new Intent(LoginActivity.this, RegisterActivity.class));
-            }
-        });
-
-        buttonGoogleSignIn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                signInWithGoogle();
-            }
-        });
+        buttonLogin.setOnClickListener(v -> loginUser());
+        buttonRegister.setOnClickListener(v -> startActivity(new Intent(LoginActivity.this, RegisterActivity.class)));
+        buttonGoogleSignIn.setOnClickListener(v -> signInWithGoogle());
 
         checkBoxShowPassword.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (isChecked) {
@@ -95,12 +77,7 @@ public class LoginActivity extends AppCompatActivity {
             }
         });
 
-        findViewById(R.id.textViewForgotPassword).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                showForgotPasswordDialog();
-            }
-        });
+        findViewById(R.id.textViewForgotPassword).setOnClickListener(v -> showForgotPasswordDialog());
     }
 
     private void loginUser() {
@@ -119,21 +96,17 @@ public class LoginActivity extends AppCompatActivity {
 
         // Authenticate user with Firebase
         mAuth.signInWithEmailAndPassword(email, password)
-                .addOnCompleteListener(this, new OnCompleteListener<AuthResult>() {
-                    @Override
-                    public void onComplete(@NonNull Task<AuthResult> task) {
-                        if (task.isSuccessful()) {
-                            // Sign in success, update UI with the signed-in user's information
-                            Log.d(TAG, "signInWithEmail:success");
-                            Toast.makeText(LoginActivity.this, "Authentication succeeded.",
-                                    Toast.LENGTH_SHORT).show();
-                            checkAndNavigateToNextActivity();
-                        } else {
-                            // If sign in fails, display a message to the user.
-                            Log.w(TAG, "signInWithEmail:failure", task.getException());
-                            Toast.makeText(LoginActivity.this, "Authentication failed.",
-                                    Toast.LENGTH_SHORT).show();
-                        }
+                .addOnCompleteListener(this, task -> {
+                    if (task.isSuccessful()) {
+                        // Sign in success, update UI with the signed-in user's information
+                        Log.d(TAG, "signInWithEmail:success");
+                        Toast.makeText(LoginActivity.this, "Authentication succeeded.", Toast.LENGTH_SHORT).show();
+                        saveUserToken(); // Save user token for consistency
+                        checkAndNavigateToNextActivity();
+                    } else {
+                        // If sign in fails, display a message to the user.
+                        Log.w(TAG, "signInWithEmail:failure", task.getException());
+                        Toast.makeText(LoginActivity.this, "Authentication failed.", Toast.LENGTH_SHORT).show();
                     }
                 });
     }
@@ -152,38 +125,27 @@ public class LoginActivity extends AppCompatActivity {
         final EditText editTextEmail = dialogView.findViewById(R.id.editTextEmail);
 
         builder.setTitle("Forgot Password")
-                .setPositiveButton("Send", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        String email = editTextEmail.getText().toString().trim();
-                        if (TextUtils.isEmpty(email)) {
-                            Toast.makeText(LoginActivity.this, "Enter email address!", Toast.LENGTH_SHORT).show();
-                            return;
-                        }
-                        resetPassword(email);
+                .setPositiveButton("Send", (dialog, which) -> {
+                    String email = editTextEmail.getText().toString().trim();
+                    if (TextUtils.isEmpty(email)) {
+                        Toast.makeText(LoginActivity.this, "Enter email address!", Toast.LENGTH_SHORT).show();
+                        return;
                     }
+                    resetPassword(email);
                 })
-                .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        dialog.dismiss();
-                    }
-                })
+                .setNegativeButton("Cancel", (dialog, which) -> dialog.dismiss())
                 .create()
                 .show();
     }
 
     private void resetPassword(String email) {
         mAuth.sendPasswordResetEmail(email)
-                .addOnCompleteListener(new OnCompleteListener<Void>() {
-                    @Override
-                    public void onComplete(@NonNull Task<Void> task) {
-                        if (task.isSuccessful()) {
-                            Toast.makeText(LoginActivity.this, "Password reset email sent.", Toast.LENGTH_SHORT).show();
-                        } else {
-                            Log.w(TAG, "sendPasswordResetEmail:failure", task.getException());
-                            Toast.makeText(LoginActivity.this, "Failed to send reset email.", Toast.LENGTH_SHORT).show();
-                        }
+                .addOnCompleteListener(task -> {
+                    if (task.isSuccessful()) {
+                        Toast.makeText(LoginActivity.this, "Password reset email sent.", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Log.w(TAG, "sendPasswordResetEmail:failure", task.getException());
+                        Toast.makeText(LoginActivity.this, "Failed to send reset email.", Toast.LENGTH_SHORT).show();
                     }
                 });
     }
@@ -211,20 +173,17 @@ public class LoginActivity extends AppCompatActivity {
     private void firebaseAuthWithGoogle(String idToken) {
         AuthCredential credential = GoogleAuthProvider.getCredential(idToken, null);
         mAuth.signInWithCredential(credential)
-                .addOnCompleteListener(this, new OnCompleteListener<AuthResult>() {
-                    @Override
-                    public void onComplete(@NonNull Task<AuthResult> task) {
-                        if (task.isSuccessful()) {
-                            // Sign in success, update UI with the signed-in user's information
-                            Log.d(TAG, "signInWithCredential:success");
-                            FirebaseUser user = mAuth.getCurrentUser();
-                            checkAndNavigateToNextActivity();
-                        } else {
-                            // If sign in fails, display a message to the user.
-                            Log.w(TAG, "signInWithCredential:failure", task.getException());
-                            Toast.makeText(LoginActivity.this, "Authentication failed.",
-                                    Toast.LENGTH_SHORT).show();
-                        }
+                .addOnCompleteListener(this, task -> {
+                    if (task.isSuccessful()) {
+                        // Sign in success, update UI with the signed-in user's information
+                        Log.d(TAG, "signInWithCredential:success");
+                        FirebaseUser user = mAuth.getCurrentUser();
+                        saveUserToken(); // Save user token for consistency
+                        checkAndNavigateToNextActivity();
+                    } else {
+                        // If sign in fails, display a message to the user.
+                        Log.w(TAG, "signInWithCredential:failure", task.getException());
+                        Toast.makeText(LoginActivity.this, "Authentication failed.", Toast.LENGTH_SHORT).show();
                     }
                 });
     }
@@ -242,9 +201,18 @@ public class LoginActivity extends AppCompatActivity {
     }
 
     private boolean arePermissionsGranted() {
-        // Implement your logic to check if permissions are granted
-        // Example: Check ACCESS_FINE_LOCATION permission
-        // Replace with your actual permission checks
-        return true; // Replace with actual check
+        // Example check for ACCESS_FINE_LOCATION permission
+        return ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void saveUserToken() {
+        // Save user token for consistency
+        FirebaseUser user = mAuth.getCurrentUser();
+        if (user != null) {
+            SharedPreferences sharedPreferences = getSharedPreferences("MyAppPrefs", MODE_PRIVATE);
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            editor.putString("user_token", user.getUid()); // Use user ID or token
+            editor.apply();
+        }
     }
 }
